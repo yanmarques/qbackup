@@ -1,0 +1,68 @@
+#!/usr/bin/python3
+
+import argparse
+import pathlib
+import shutil
+import os
+import sys
+
+
+def sanitize_path(untrusted_path: str) -> str:
+    '''
+    Receive an untrusted backup destination path into
+    a somewhat trusted one.
+    
+    Security controls:
+    1. The path will always be relative to user home directory. 
+    2. Path traversal resistant.
+    '''
+
+    # this call resolves the path to an absolute one, so any attempt
+    # to path traversal will happen now.
+    pot = pathlib.Path(untrusted_path).resolve()
+
+    # finally join the user home directory with the intended path
+    return pathlib.Path.home() / pot
+
+
+def transfer_backup(path: str) -> None:
+    '''
+    Copy backup disk from standard input to a regular file.
+
+    Throws an error if file already exists.
+    '''
+
+    if pathlib.Path(path).exists():
+        raise FileExistsError(path)
+
+    with open(path, 'wb') as fdst:
+        shutil.copyfileobj(sys.stdin.buffer, fdst)
+        fdst.flush()
+        os.fsync(fdst.fileno())
+
+
+def parse_args() -> argparse.Namespace:
+    '''
+    Parse command line arguments.
+    '''
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', 
+                        action='store_true',
+                        help='Shell compatibility option. It is a noop.')
+    parser.add_argument('path', help='Backup path target.')
+    return parser.parse_args()
+
+
+def main() -> int:
+    '''
+    Entrypoint.
+    '''
+
+    args = parse_args()
+    path = sanitize_path(args.path)
+    transfer_backup(path)
+
+
+if __name__ == '__main__':
+    main()

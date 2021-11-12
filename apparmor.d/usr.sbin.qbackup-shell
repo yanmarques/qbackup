@@ -1,0 +1,10 @@
+# Last Modified: Thu Nov 11 20:04:38 2021
+#include <tunables/global>
+
+/usr/sbin/qbackup-shell {
+  #include <abstractions/base>
+
+  /usr/bin/python3 Cx,
+  /usr/sbin/qbackup-shell r,
+  owner @{HOME}/** rw,
+}

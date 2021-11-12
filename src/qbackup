@@ -1,0 +1,175 @@
+#!/bin/bash
+set -e
+
+# expect to be running in a non-login shell environment
+# so .bash_profile is manually sourced
+. ~/.bash_profile
+
+usage () (
+	echo "Usage: $(basename $0) [-hxo] [-f NAME_PREFIX, -t TARGET_VM, -p PASSPHRASE_FILE] [VMS,]"
+	exit 128
+)
+
+bkpname() (
+	date +'%Y-%m-%dT%H%M' 
+)
+
+main() (
+	local shutdown=true
+	local syslog=true
+	local dest_vm="$QBKP_DEST_VM"
+	local pass_file="$QBKP_PASS_FILE"
+
+	local name_prefix
+	local vms
+
+	local block
+
+	local succeeded=false
+
+	local argv=0
+	while getopts ':hxof:p:t:' arg; do
+		argv=$(( argv + 2 ))
+
+		case "$arg" in
+			t)
+				dest_vm="$OPTARG"
+				;;
+			p)
+				pass_file="$OPTARG"
+				;;
+			f)
+				name_prefix="$OPTARG"
+				;;
+			o)
+				syslog=false
+				argv=$(( argv - 1 ))
+				;;
+			x)
+				shutdown=false
+				argv=$(( argv - 1 ))
+				;;
+			h)
+				usage
+				;;
+			?)
+				echo "Unknow option: -$OPTARG"
+				exit 1
+				;;
+
+		esac
+	done
+
+	if [ "x$dest_vm" = "x" ] || [ "x$pass_file" = "x" ]; then
+		usage
+	fi
+
+	# easy trick to get all last arguments
+	for _ in $(seq "$argv"); do
+		shift
+	done
+	vms="$@"
+
+	local workingdir="$(mktemp -d -p "$HOME")"
+
+	cleanup() (
+		set +e
+
+		if [ -d "$workingdir" ]; then
+			echo "[+] trying to umount backup"
+			cd /
+			rm -rf "$workingdir"
+		fi
+		
+		if [ "x$block" != "x" ]; then
+			echo "[+] detaching disk"
+			qvm-block detach "$dest_vm" dom0:"$(basename "$block")"
+			sudo losetup -d "$block"
+		fi
+
+		if $shutdown; then
+			echo "[+] shutting vm down"
+			qvm-shutdown --quiet --wait "$dest_vm"
+		fi
+
+		if ! $succeeded; then
+			notify-send -u critical 'Automated Backup' 'Failure on backup. Check your logs'
+		fi
+	)
+
+	prepare_destvm() {
+		## Prepare the destination vm to receive the backup disk.
+		## IMPORTANT: this very function modifies the `block` variable,
+		## used at cleanup stage to detach the block.
+
+		echo "[+] starting vm"
+		qvm-start --quiet --skip-if-running "$dest_vm"
+		
+		echo "[+] creating loop device"
+		block="$(sudo losetup --show -f ./file.backup)"
+		
+		# with large disks, it can take some time for the block to be available 
+		sleep 5
+
+		echo "[+] attaching backup disk to vm"
+		qvm-block attach "$dest_vm" dom0:"$(basename "$block")"
+	}
+
+	generate() (
+		local args
+
+		# common arguments
+		args=( --yes --compress --exclude dom0 --passphrase-file "$pass_file" )
+
+		# output is not a terminal, it's syslog, so user might not
+		# even want to get a fancy progress and all that details
+		if $syslog; then
+			args+=( --quiet )
+		fi
+
+		# start qubes backup
+		qvm-backup ${args[@]} file.backup $vms
+	)
+	
+	transfer() (
+		local path
+		path="$name_prefix$(bkpname)".backup 
+
+		set +e
+		echo "[+] notifying vm about backup"
+		echo "$path" | qvm-run --pass-io --service "$dest_vm" qubes.BackupCarrier
+
+		if [ "$?" -gt 0 ]; then
+			echo "[-] backup just failed!"
+			exit 5
+		fi
+		set -e
+	)
+	
+	if $syslog; then
+		# send all output to a temporary pipe where all output is sent to `logger` facility.
+		# also redirect stderr to stdout	
+		exec > >(logger --tag qbackup) 2>&1
+	fi
+
+	# change working directory
+	cd "$workingdir"
+	
+	# on exit call `cleanup`
+	trap cleanup EXIT
+
+	notify-send -u critical 'Automated Backup' 'Starting backup'
+	generate
+
+	prepare_destvm
+	
+	notify-send 'Automated Backup' 'Transfering backup to VM...'
+	transfer
+	
+	notify-send -u critical 'Automated Backup' 'Backup completed!'
+	
+	# mark as succeeded, so cleanup knows about it
+	succeeded=true
+)
+
+main $@
