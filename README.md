@@ -18,9 +18,9 @@ One should be advised that, as a general rule, _manually audit code from unknow 
 
 There are 3 main files for the 3 components of the backup infrastructure.
 
-1. qbackup: installed in dom0
-2. qubes.BackupCarrier: installed in TemplateVM (or AppVM with qubes-bind-dirs) which has access to the remote server through ssh
-3. qbackup-shell: installed in the remote ssh server
+1. [qbackup](src/qbackup): installed in dom0
+2. [qubes.BackupCarrier](src/qubes.BackupCarrier): installed in TemplateVM (or AppVM with qubes-bind-dirs) which has access to the remote server through ssh
+3. [qbackup-shell](src/qbackup-shell): installed in the remote ssh server
 
 There is an (recomended) apparmor profile for the `qbackup-shell`.
 
@@ -52,7 +52,7 @@ Download the source code and execute as root the following command to install (p
 $ make server user=backup-awesome-user
 ```
 
-The account shell was designed to be protected against most Remote Command Injection and Path Traversal (which would allow abitrary file writes). Although it's recommended to lockdown the shell executable with an apparmor profile, for this execute as root:
+The account shell was designed to be protected against most Remote Command Injection and Path Traversal (which would allow abitrary file writes). Although it's recommended to lockdown the shell executable with an AppArmor profile, for this execute as root:
 
 ```
 $ make server-aa
@@ -60,11 +60,11 @@ $ make server-aa
 
 # Setup
 
-After installed one must configure the following:
+After installed, one must configure the following:
 
 ## AppVM
 
-One must configure the ssh server endpoint. The configuration is the shell environment `SSH_CONN`. The best way to configure this is defining the variable at `~/.bashrc`. Example:
+The ssh server endpoint. The configuration is the environment variabe `SSH_CONN`. The best way to configure this is defining the variable at `~/.bashrc`. Example:
 
 ```bash
 SSH_CONN=backup-awesome-user@remote.server.my
@@ -72,25 +72,25 @@ SSH_CONN=backup-awesome-user@remote.server.my
 
 ## Dom0
 
-This configuration is not required, because one can provide them at command line. The configuration is also shell environments so one can also use `~/.bashrc`. Configuration available:
+This configuration is not required, because one can provide them at command line. But if one wants a user wide setup, configure environments variables at `~/.bashrc`. The following variables are available (there is no need to export them):
 
-- QBKP_DEST_VM: AppVM name where backups are sent to. This VM is not a regular one, it must have the qbackup service for TemplateVMs. For more information see (#installation/templatevm).
-- QBKP_PASS_FILE: File containing the passphrase for `qvm-backup` tool. 
+- `QBKP_DEST_VM`: AppVM name where backups are sent to. This VM is not a regular one, it must have the qbackup service for TemplateVMs. For more information see (#installation/templatevm).
+- `QBKP_PASS_FILE`: File containing the passphrase for `qvm-backup` tool. 
 
 # Example
 
 Backups in QubesOS are executed in Dom0 and if one wants scheduled backups, Dom0 is the best place for it. Imagine one wants to backup `vault` AppVM in a cronjob:
 
-```
+```bash
  * * * * * your-username qbackup -f my-prefix- -t backups-vm -p /etc/bkp-passphrase.txt vault
 ```
 
 Summary:
 
-- -f: string prepended to the backup name in the remote server. It can contains a directory provided that the remote server already contains such directory (ie.: appvms/my-prefix-)
-- -t: destination VM of the backup. If not provided tries to read from environment variable `QBKP_DEST_VM`.
-- -p: file containing the passphrase for `qubes-backup` tool. If not provided tries to read from environment variable `QBKP_PASS_FILE`.
-- vault: receives a list of arguments with the AppVMs to backup. If not provided, reproduces the same exact behaviour of `qvm-backup` tool, which is to select all VMs included in backups by default.
+- `-f`: string prepended to the backup name in the remote server. It can contains a directory provided that the remote server already contains such directory (ie.: appvms/my-prefix-)
+- `-t`: destination VM of the backup. If not provided tries to read from environment variable `QBKP_DEST_VM`.
+- `-p`: file containing the passphrase for `qubes-backup` tool. If not provided tries to read from environment variable `QBKP_PASS_FILE`.
+- `vault`: receives a list of arguments with the AppVMs to backup. If not provided, reproduces the same exact behaviour of `qvm-backup` tool, which is to select all VMs included in backups by default.
 
 If one wants to see logging information, filter journald logs with:
 
