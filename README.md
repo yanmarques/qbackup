@@ -22,7 +22,7 @@ There are 3 main files for the 3 components of the backup infrastructure.
 2. [qubes.BackupCarrier](src/qubes.BackupCarrier): installed in TemplateVM (or AppVM with qubes-bind-dirs) which has access to the remote server through ssh
 3. [qbackup-shell](src/qbackup-shell): installed in the remote ssh server
 
-There is an (recomended) apparmor profile for the `qbackup-shell`.
+There is an (recomended) apparmor [profile](apparmor.d/usr.sbin.qbackup-shell) for the `qbackup-shell`.
 
 # Installation
 
