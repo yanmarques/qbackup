@@ -2,26 +2,28 @@
 Configuration utility functions
 """
 
-
 import os
-from types import TracebackType
+from pathlib import Path
 import yaml
 import fcntl
 from typing import Dict, cast
+from .api import AbstractDataConnector
 
 
-class Config:
+class LocalDataConnector(AbstractDataConnector):
 
     config_name = 'config.yaml'
     lock_name = 'qbackup.lock'
 
-    def __init__(self, path: str) -> None:
-        self._path = path
-        self._lock_file = os.path.join(path, self.lock_name)
-        self._config_file = os.path.join(path, self.config_name)
-        self._lock_file_fd = None
+    def __init__(self, path: str, default) -> None:
+        super().__init__()
+        self._default = default
+        self._path: Path = Path(path)
+        self._lock_file: Path = path / self.lock_name
+        self._config_file: Path = path / self.config_name
+        self._lock_file_fd: int = None
 
-    def __enter__(self) -> "Config":
+    def connect(self) -> None:
         open_mode = os.O_RDWR | os.O_CREAT | os.O_TRUNC
         fd = os.open(self._lock_file, open_mode)
         try:
@@ -31,14 +33,7 @@ class Config:
         else:
             self._lock_file_fd = fd
 
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] = None,
-        exc_value: BaseException = None,
-        traceback: TracebackType = None,
-    ) -> "Config":
+    def close(self) -> None:
         # Do not remove the lockfile:
         #   https://github.com/tox-dev/py-filelock/issues/31
         #   https://stackoverflow.com/questions/17708885/flock-removing-locked-file-without-race-condition
@@ -49,6 +44,9 @@ class Config:
             os.close(fd)
 
     def load(self) -> Dict:
+        if not self._config_file.exists():
+            return self._default
+
         with open(self._config_file) as fp:
             return yaml.safe_load(fp)
 
