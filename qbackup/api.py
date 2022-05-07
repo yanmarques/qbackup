@@ -3,9 +3,10 @@ Data structures for default API
 """
 
 from abc import ABC, abstractclassmethod
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from types import TracebackType
 from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Tuple, Union
+from uuid import uuid4
 
 
 class AbstractDataConnector(ABC):
@@ -48,6 +49,18 @@ class AbstractModel(ABC):
 
     def serialize(self) -> Tuple[Hashable, Any]:
         return self.keyid(), asdict(self)
+
+
+def genuuid() -> str:
+    return str(uuid4())
+
+
+@dataclass
+class UUIDModelIdentifier:
+    id: str = field(default_factory=genuuid)
+
+    def keyid(self) -> Hashable:
+        return self.id
 
 
 class AbstractDataManager(ABC):

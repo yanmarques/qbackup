@@ -48,7 +48,8 @@ class LocalDataConnector(AbstractDataConnector):
             return self._default
 
         with open(self._config_file) as fp:
-            return yaml.safe_load(fp)
+            data = yaml.safe_load(fp)
+            return data or self._default
 
     def dump(self, data) -> None:
         with open(self._config_file, 'w') as fp:
