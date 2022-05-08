@@ -17,9 +17,6 @@ class SqliteDataManager(AbstractDataManager):
         *args,
         **kwargs
     ) -> None:
-        kwargs.setdefault("id_field", "id")
-        self._id = kwargs.pop("id_field")
-
         super().__init__(*args, **kwargs)
         if not isinstance(self._connector, SqliteConnector):
             raise TypeError(
@@ -75,7 +72,7 @@ class SqliteDataManager(AbstractDataManager):
                 SET
                     {placeholders_str}
                 WHERE
-                    id = ?
+                    {self._id} = ?
             """, [*model_data.values(), model_id])
 
     def delete(self, keyid: Hashable) -> None:
@@ -85,18 +82,18 @@ class SqliteDataManager(AbstractDataManager):
             DELETE FROM 
                 {self._prefix}
             WHERE
-                id = ?
+                {self._id} = ?
         """, [keyid])
 
-    def _find_data_by_keyid(self, keyid: Hashable) -> Optional[sqlite3.Row]:
+    def _find_data_by_field(self, field: str, value) -> Optional[sqlite3.Row]:
         cursor = self._execute_sql(f"""
             SELECT
                 *
             FROM
                 {self._prefix}
             WHERE
-                id = ?
-        """, [keyid])
+                {field} = ?
+        """, [value])
 
         return cursor.fetchone()
 
@@ -152,8 +149,15 @@ class StreamDataManager(AbstractDataManager):
         self.get_or_fail(keyid)
         self._branch.pop(keyid)
 
-    def _find_data_by_keyid(self, keyid: Hashable) -> Any:
-        return self._branch.get(keyid)
+    def _find_data_by_field(self, field: str, value) -> Optional[Any]:
+        # Just be smart, use O(1) when we are looking for the id
+        if field == self._id:
+            return self._branch.get(value)
+
+        for item in self._fetch_list():
+            if item.get(field) == value:
+                return item
+        return None
 
     def _fetch_list(self) -> Iterable[Dict]:
         return self._branch.values()

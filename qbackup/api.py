@@ -65,8 +65,10 @@ class AbstractDataManager(ABC):
         prefix: str,
         connector: AbstractDataConnector,
         model_factory: Callable,
+        id_field: str = "id"
     ) -> None:
         super().__init__()
+        self._id = id_field
         self._prefix = prefix
         self._connector = connector
         self._data = None
@@ -74,10 +76,7 @@ class AbstractDataManager(ABC):
         self._init()
 
     def get(self, keyid: Hashable) -> Optional[AbstractModel]:
-        result = self._find_data_by_keyid(keyid)
-        if result is None:
-            return None
-        return self._build_model(result)
+        return self.where(self._id, keyid)
 
     def list(self) -> List[AbstractModel]:
         return list(map(self._build_model, self._fetch_list()))
@@ -90,6 +89,12 @@ class AbstractDataManager(ABC):
             )
 
         return model
+
+    def where(self, field: str, value) -> Optional[AbstractModel]:
+        result = self._find_data_by_field(field, value)
+        if result is None:
+            return None
+        return self._build_model(result)
 
     @abstractclassmethod
     def save(self) -> None:
@@ -104,7 +109,7 @@ class AbstractDataManager(ABC):
         pass
 
     @abstractclassmethod
-    def _find_data_by_keyid(self, keyid: Hashable) -> Dict:
+    def _find_data_by_field(self, keyid: Hashable, value) -> Optional[Any]:
         pass
 
     @abstractclassmethod

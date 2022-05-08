@@ -55,28 +55,38 @@ def data_manager(request, tmpdir):
     connector.close()
 
 
-def test_sqlite_database_list_all_items_when_empty(data_manager):
+def test_database_list_all_items_when_empty(data_manager):
     assert data_manager.list() == []
 
+def test_database_returns_data_when_looking_for_with_custom_field(data_manager):
+    model = Foo(id="key", name="baz")
+    data_manager.upsert(model)
 
-def test_sqlite_database_get_model_when_existent(data_manager):
+    assert data_manager.where("name", "baz") == model
+
+
+def test_database_returns_none_when_finding_nonexistent_item(data_manager):
+    assert data_manager.where("name", "baz") is None
+
+
+def test_database_get_model_when_existent(data_manager):
     model = Foo(id="key", name="baz")
     data_manager.upsert(model)
     assert data_manager.get("key") == model
 
 
-def test_sqlite_database_get_model_returns_none_when_nonexistent(data_manager):
+def test_database_get_model_returns_none_when_nonexistent(data_manager):
     assert data_manager.get("does not exists") is None
 
 
-def test_sqlite_database_inserts_item_when_nonexistent(data_manager):
+def test_database_inserts_item_when_nonexistent(data_manager):
     model = Foo(id="key", name="baz")
     data_manager.upsert(model)
 
     assert data_manager.get("key") == model
 
 
-def test_sqlite_database_updates_item_when_existent(data_manager):
+def test_database_updates_item_when_existent(data_manager):
     model = Foo(id="key", name="baz")
     data_manager.upsert(model)
 
@@ -86,7 +96,7 @@ def test_sqlite_database_updates_item_when_existent(data_manager):
     assert data_manager.get("key") == new_model
 
 
-def test_sqlite_database_updates_item_when_existent(data_manager):
+def test_database_updates_item_when_existent(data_manager):
     model = Foo(id="key", name="baz")
     data_manager.upsert(model)
 
@@ -96,7 +106,17 @@ def test_sqlite_database_updates_item_when_existent(data_manager):
     assert data_manager.get("key") == new_model
 
 
-def test_sqlite_database_deletes_item_when_existent(data_manager):
+def test_database_list_all_items(data_manager):
+    model1 = Foo(id="key1", name="baz")
+    model2 = Foo(id="key2", name="bar")
+
+    data_manager.upsert(model1)
+    data_manager.upsert(model2)
+
+    assert data_manager.list() == [model1, model2]
+
+
+def test_database_deletes_item_when_existent(data_manager):
     model = Foo(id="key", name="baz")
     data_manager.upsert(model)
     data_manager.delete("key")
@@ -104,6 +124,6 @@ def test_sqlite_database_deletes_item_when_existent(data_manager):
     assert data_manager.get("key") is None
 
 
-def test_sqlite_database_deletes_item_raise_error_when_nonexistent(data_manager):
+def test_database_deletes_item_raise_error_when_nonexistent(data_manager):
     with pytest.raises(ValueError):
         data_manager.delete("key")
