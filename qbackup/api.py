@@ -96,6 +96,28 @@ class AbstractDataManager(ABC):
             return None
         return self._build_model(result)
 
+    def slow_find_all(self, **kwargs) -> Iterable[AbstractModel]:
+        found_models: Iterable[AbstractModel] = []
+
+        for model in self.list():
+            _, model_data = model.serialize()
+            if all(
+                model_data.get(key) == value
+                for key, value in kwargs.items()
+            ):
+                found_models.append(model)
+        return found_models
+
+    def slow_find_one(self, **kwargs) -> Iterable[AbstractModel]:
+        for model in self.list():
+            _, model_data = model.serialize()
+            if all(
+                model_data.get(key) == value
+                for key, value in kwargs.items()
+            ):
+                return model
+        return None
+
     @abstractclassmethod
     def save(self) -> None:
         pass

@@ -58,6 +58,7 @@ def data_manager(request, tmpdir):
 def test_database_list_all_items_when_empty(data_manager):
     assert data_manager.list() == []
 
+
 def test_database_returns_data_when_looking_for_with_custom_field(data_manager):
     model = Foo(id="key", name="baz")
     data_manager.upsert(model)
@@ -127,3 +128,63 @@ def test_database_deletes_item_when_existent(data_manager):
 def test_database_deletes_item_raise_error_when_nonexistent(data_manager):
     with pytest.raises(ValueError):
         data_manager.delete("key")
+
+
+def test_database_slow_find_all_models_with_condition(data_manager):
+    model1 = Foo(id="key1", name="baz")
+    model2 = Foo(id="key2", name="bar")
+
+    data_manager.upsert(model1)
+    data_manager.upsert(model2)
+
+    models = data_manager.slow_find_all(
+        id="key1",
+        name="baz",
+    )
+
+    assert models == [model1]
+
+
+def test_database_slow_find_all_returns_empty_when_no_model_matches_all_conditions(data_manager):
+    model1 = Foo(id="key1", name="baz")
+    model2 = Foo(id="key2", name="bar")
+
+    data_manager.upsert(model1)
+    data_manager.upsert(model2)
+
+    models = data_manager.slow_find_all(
+        id="abc",
+        name="baz",
+    )
+
+    assert models == []
+
+
+def test_database_slow_find_one_return_model_that_matches_condition(data_manager):
+    model1 = Foo(id="key1", name="baz")
+    model2 = Foo(id="key2", name="bar")
+
+    data_manager.upsert(model1)
+    data_manager.upsert(model2)
+
+    found_model = data_manager.slow_find_one(
+        id="key2",
+        name="bar",
+    )
+
+    assert found_model == model2
+
+
+def test_database_slow_find_one_return_none_when_no_model_matches_condition(data_manager):
+    model1 = Foo(id="key1", name="baz")
+    model2 = Foo(id="key2", name="bar")
+
+    data_manager.upsert(model1)
+    data_manager.upsert(model2)
+
+    found_model = data_manager.slow_find_one(
+        id="abc",
+        name="bar",
+    )
+
+    assert found_model is None
