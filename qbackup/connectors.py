@@ -3,24 +3,20 @@ Configuration utility functions
 """
 
 import os
-from pathlib import Path
-import yaml
 import fcntl
-from typing import Dict, cast
+import sqlite3
+from pathlib import Path
+from typing import Optional, cast
 from .api import AbstractDataConnector
 
 
-class LocalDataConnector(AbstractDataConnector):
+class FileBackedConnector(AbstractDataConnector):
 
-    config_name = 'config.yaml'
     lock_name = 'qbackup.lock'
 
-    def __init__(self, path: str, default) -> None:
+    def __init__(self, path) -> None:
         super().__init__()
-        self._default = default
-        self._path: Path = Path(path)
-        self._lock_file: Path = path / self.lock_name
-        self._config_file: Path = path / self.config_name
+        self._lock_file: Path = Path(path) / self.lock_name
         self._lock_file_fd: int = None
 
     def connect(self) -> None:
@@ -43,14 +39,19 @@ class LocalDataConnector(AbstractDataConnector):
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
 
-    def load(self) -> Dict:
-        if not self._config_file.exists():
-            return self._default
 
-        with open(self._config_file) as fp:
-            data = yaml.safe_load(fp)
-            return data or self._default
+class SqliteConnector(AbstractDataConnector):
+    def __init__(self, database: str, bootstrap_sql: str = None) -> None:
+        super().__init__()
+        self._database = database
+        self._bootstrap_sql = bootstrap_sql
+        self._conn: Optional[sqlite3.Connection] = None
 
-    def dump(self, data) -> None:
-        with open(self._config_file, 'w') as fp:
-            yaml.safe_dump(data, fp)
+    def connect(self) -> None:
+        self._conn = sqlite3.connect(self._database)
+        if self._bootstrap_sql is not None:
+            self._conn.executescript(self._bootstrap_sql)
+            self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()

@@ -6,18 +6,16 @@ import argparse
 import os
 from pathlib import Path
 
-from numpy import add
-
 from .models import Group
-from .api import DictDataManager
-from .connectors import LocalDataConnector
+from .database import SqliteDataManager
+from .connectors import SqliteConnector
 
 
 class QbackupManager:
     def initialize(self, connector, args) -> None:
         self.connector = connector
         self.args = args
-        self.data_manager = DictDataManager(connector, Group)
+        self.data_manager = SqliteDataManager(connector, Group)
         
     def list_groups(self) -> None:
         print(self.data_manager.list())
@@ -60,9 +58,8 @@ class QbackupManager:
         self.data_manager.save()
 
     def run_backup(self) -> None:
-        data_manager = DictDataManager(self.connector, Group)
         groups_to_run = []
-        for group in data_manager.list():
+        for group in self.data_manager.list():
             if group.period == self.args.period:
                 groups_to_run.append(group)
 
@@ -114,7 +111,7 @@ def main():
     local_path = Path("~/.config/qbackup").expanduser()
     os.makedirs(local_path, exist_ok=True)
 
-    with LocalDataConnector(local_path, {}) as connector:
+    with SqliteConnector(local_path, {}) as connector:
         manager.initialize(connector, args)
         args.function()
 
