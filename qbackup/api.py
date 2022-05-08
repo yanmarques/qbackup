@@ -28,7 +28,7 @@ class AbstractDataConnector(ABC):
 
     def __exit__(
         self,
-        exc_type: type[BaseException] = None,
+        exc_type: BaseException = None,
         exc_value: BaseException = None,
         traceback: TracebackType = None,
     ) -> "AbstractDataConnector":

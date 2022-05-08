@@ -3,13 +3,15 @@ CLI interface functions
 """
 
 import argparse
+from datetime import datetime
 import os
 from pathlib import Path
 from pprint import pprint
 from re import M
+import subprocess
 from typing import Dict
 
-from .api import YamlStream
+from .api import AbstractDataManager, YamlStream
 from .connectors import FileBackedConnector
 from .database import StreamDataManager
 from .models import Group, Period, Qube
@@ -42,19 +44,19 @@ class QbackupCLIManager:
     def initialize(self, connector, args) -> None:
         self.connector = connector
         self.args = args
-        self.groups = self.data_manager_factory(
+        self.groups: AbstractDataManager = self.data_manager_factory(
             "groups",
             connector,
             Group,
             id_field="name"
         )
-        self.periods = self.data_manager_factory(
+        self.periods: AbstractDataManager = self.data_manager_factory(
             "periods",
             connector,
             Period,
             id_field="name"
         )
-        self.qubes = self.data_manager_factory(
+        self.qubes: AbstractDataManager = self.data_manager_factory(
             "qubes",
             connector,
             Qube
@@ -171,15 +173,62 @@ class QbackupCLIManager:
             self.periods.delete(period_name)
         self.periods.save()
 
+    def run_backup(self) -> None:
+        groups = self.groups.slow_find_all(
+            period=self.args.period
+        )
 
-def run_backup(self) -> None:
-    pass
-    # groups_to_run = []
-    # for group in self.data_manager.list():
-    #     if group.period == self.args.period:
-    #         groups_to_run.append(group)
+        if not groups:
+            raise ValueError(
+                f"Any groups found for period: {self.args.period}"
+            )
 
-    # print(groups_to_run)
+        subprocess.run([
+            "notify-send",
+            "-u",
+            "critical",
+            "Automated Backup",
+            f"Starting backup: {self.args.period}"
+        ], env={"DISPLAY": ":0"})
+
+        for group in groups:
+            self.run_backup_for_group(group)
+
+    def run_backup_for_group(self, group: Group) -> None:
+        qubes = self.qubes.slow_find_all(
+            group_name=group.name
+        )
+
+        subprocess.run([
+            "notify-send",
+            "Automated Backup",
+            f"Starting backup for group: {group.name}"
+        ], env={"DISPLAY": ":0"})
+
+        now = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        remote_command = " ; ".join([
+            ". ~/.bash_profile",
+            f"ssh $SSH_CONN {group.name}-{now}.backup",
+        ])
+
+        dest_vm = "home-backups"
+
+        args = [
+            "qvm-backup",
+            "--yes",
+            "--compress",
+            "--exclude",
+            "dom0",
+            "--dest-vm",
+            dest_vm,
+            f"sh -c '{remote_command}'",
+        ]
+
+        for qube in qubes:
+            args.append(qube.name)
+
+        password = b"abc"
+        subprocess.run(args, input=password + b"\n")
 
 
 class CommandLineInterface:
@@ -260,6 +309,9 @@ class CommandLineInterface:
 
         run_parser = subparsers.add_parser("run")
         run_parser.add_argument("period", type=str)
+        run_parser.set_defaults(
+            function=self.cli_manager.run_backup
+        )
 
         qube_parser = subparsers.add_parser("qube")
         qube_subparsers = qube_parser.add_subparsers()
