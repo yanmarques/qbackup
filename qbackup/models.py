@@ -3,19 +3,29 @@ Models used for configuration
 """
 
 from dataclasses import dataclass, field
-from typing import Hashable, Set
+from typing import Hashable
 
-from .api import AbstractModel
+from .api import AbstractModel, UUIDModelIdentifier
 
 
 @dataclass
 class Group(AbstractModel):
     name: str
     period: str
-    qubes: Set[str] = field(default_factory=set)
-
-    def __post_init__(self):
-        self.qubes = set(self.qubes)
 
     def keyid(self) -> Hashable:
         return self.name
+
+
+@dataclass
+class Period(AbstractModel):
+    name: str
+
+    def keyid(self) -> Hashable:
+        return self.name
+
+
+@dataclass
+class Qube(UUIDModelIdentifier, AbstractModel):
+    name: str = field(default=None)
+    group_name: str = field(default=None)
