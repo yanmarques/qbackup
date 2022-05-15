@@ -99,14 +99,6 @@ class QbackupCLIManager:
             self.qubes.delete(qube_model.id)
         self.qubes.save()
 
-    def add_qubes_to_group(self) -> None:
-        group = self.groups.get_or_fail(self.args.group)
-
-        for qube in self.args.qubes[0]:
-            model = Qube(name=qube, group_name=group.name)
-            self.qubes.upsert(model)
-        self.qubes.save()
-
     def delete_group(self) -> None:
         for qube in self.qubes.slow_find_all(
             group_name=self.args.group
@@ -119,7 +111,7 @@ class QbackupCLIManager:
     def list_qubes(self) -> None:
         pprint(self.qubes.list())
 
-    def associate_qubes_with_group(self) -> None:
+    def associate_qubes_to_group(self) -> None:
         self.groups.get_or_fail(self.args.group)
 
         for qube_name in self.args.qubes[0]:
@@ -327,7 +319,7 @@ class CommandLineInterface:
         add_qube_parser.add_argument("group", type=str, help="Group name")
         add_qube_parser.add_argument("qubes", action="append", nargs="+")
         add_qube_parser.set_defaults(
-            function=self.cli_manager.associate_qubes_with_group
+            function=self.cli_manager.associate_qubes_to_group
         )
 
         ls_qube_parser = qube_subparsers.add_parser("list")

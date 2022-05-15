@@ -176,7 +176,7 @@ def test_add_group_will_fail_when_period_not_exists(cli_manager):
 def test_delete_group_will_disassociate_all_qubes(cli_manager):
     cli_manager.add_periods()
     cli_manager.add_group()
-    cli_manager.add_qubes_to_group()
+    cli_manager.associate_qubes_to_group()
 
     assert cli_manager.qubes.list()
 
@@ -199,15 +199,15 @@ def test_delete_group_will_disassociate_all_qubes(cli_manager):
     ],
     indirect=True,
 )
-def test_add_qubes_to_group(cli_manager):
+def test_associate_qubes_to_group(cli_manager):
     expected_qubes = [
-        dict(name="foo qube", group_name="foo group"),
-        dict(name="bar qube", group_name="foo group"),
+        dict(name=name, group_name=cli_manager.args.group)
+        for name in cli_manager.args.qubes[0]
     ]
 
     cli_manager.add_periods()
     cli_manager.add_group()
-    cli_manager.add_qubes_to_group()
+    cli_manager.associate_qubes_to_group()
     
     qubes = [
         dict(name=q.name, group_name=q.group_name)
@@ -215,6 +215,29 @@ def test_add_qubes_to_group(cli_manager):
     ]
 
     assert qubes == expected_qubes
+
+
+@pytest.mark.parametrize(
+    "cli_manager",
+    [
+        {
+            # Add the period before creating the group
+            "periods": (["monthly"],),
+
+            "period": "monthly",
+            "group": "foo group",
+            "qubes": [["foo qube", "bar qube"]],
+        }
+    ],
+    indirect=True,
+)
+def test_associate_qubes_to_group_will_fail_when_qubes_is_already_associated(cli_manager):
+    cli_manager.add_periods()
+    cli_manager.add_group()
+    cli_manager.associate_qubes_to_group()
+    
+    with pytest.raises(ValueError):
+        cli_manager.associate_qubes_to_group()
 
 
 @pytest.mark.parametrize(
@@ -252,7 +275,7 @@ def test_delete_qubes_from_group(cli_manager):
 
     cli_manager.add_periods()
     cli_manager.add_group()
-    cli_manager.add_qubes_to_group()
+    cli_manager.associate_qubes_to_group()
 
     # Change the qubes that will be deleted at runtime
     cli_manager.args = cli_manager.args._replace(
