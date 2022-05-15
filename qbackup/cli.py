@@ -11,7 +11,7 @@ from re import M
 import subprocess
 from typing import Dict
 
-from .api import AbstractDataManager, YamlStream
+from .api import AbstractDataManager, ModelNotFound, YamlStream
 from .connectors import FileBackedConnector
 from .database import StreamDataManager
 from .models import Group, Period, Qube
@@ -72,7 +72,7 @@ class QbackupCLIManager:
 
         period = self.periods.get(self.args.period)
         if period is None:
-            raise ValueError(
+            raise ModelNotFound(
                 f"Period not found: {self.args.period}. "
                 f"Please create it first."
             )
@@ -92,7 +92,7 @@ class QbackupCLIManager:
             )
 
             if qube_model is None:
-                raise ValueError(
+                raise ModelNotFound(
                     f"Unknown qube: {qube}"
                 )
 
@@ -179,8 +179,8 @@ class QbackupCLIManager:
         )
 
         if not groups:
-            raise ValueError(
-                f"Any groups found for period: {self.args.period}"
+            raise ModelNotFound(
+                f"No groups found for period: {self.args.period}"
             )
 
         subprocess.run([
@@ -346,7 +346,7 @@ class CommandLineInterface:
         )
 
         del_group_parser = group_subparsers.add_parser("del")
-        del_group_parser.add_argument("group", type=str, help="Group name")
+        del_group_parser.add_argument("group", help="Group name")
         del_group_parser.set_defaults(
             function=self.cli_manager.delete_group
         )
@@ -362,7 +362,7 @@ class CommandLineInterface:
         del_period_parser.add_argument(
             "periods",
             action="append",
-            nargs="*",
+            nargs="+",
             help="Period name"
         )
         del_period_parser.set_defaults(
@@ -373,7 +373,7 @@ class CommandLineInterface:
         add_period_parser.add_argument(
             "periods",
             action="append",
-            nargs="*",
+            nargs="+",
             help="Period name"
         )
         add_period_parser.set_defaults(

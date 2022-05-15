@@ -12,6 +12,11 @@ from uuid import uuid4
 import yaml
 
 
+class ModelNotFound(ValueError):
+    def __init__(self, *args) -> None:
+        super().__init__(*args)
+
+
 class AbstractDataConnector(ABC):
 
     @abstractclassmethod
@@ -84,7 +89,7 @@ class AbstractDataManager(ABC):
     def get_or_fail(self, keyid: Hashable) -> AbstractModel:
         model = self.get(keyid)
         if model is None:
-            raise ValueError(
+            raise ModelNotFound(
                 f"Unable to find model with keyid: {keyid}"
             )
 
