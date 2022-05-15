@@ -4,23 +4,31 @@ CLI interface functions
 
 import argparse
 from datetime import datetime
+import getpass
 import os
 from pathlib import Path
 from pprint import pprint
 from re import M
+import shlex
+from sqlite3 import Timestamp
 import subprocess
+from threading import current_thread
 from typing import Dict
 
 from .api import AbstractDataManager, ModelNotFound, YamlStream
 from .connectors import FileBackedConnector
 from .database import StreamDataManager
-from .models import Group, Period, Qube
+from .models import DestQube, Group, Password, Period, Qube
 
 
 INIT_SQL = """
 CREATE TABLE groups (
     name VARCHAR NOT NULL PRIMARY KEY,
     period VARCHAR NOT NULL,
+    password VARCHAR NOT NULL,
+    dest_qube VARCHAR NOT NULL,
+    FOREIGN KEY (dest_qube) REFERENCES dest_qube(id),
+    FOREIGN KEY (password) REFERENCES passwords(content),
     FOREIGN KEY (period) REFERENCES periods(name)
 );
 
@@ -33,6 +41,18 @@ CREATE TABLE qubes (
     name VARCHAR NOT NULL,
     group_name VARCHAR NOT NULL,
     FOREIGN KEY (group_name) REFERENCES groups(name)
+);
+
+CREATE TABLE passwords (
+    name VARCHAR NOT NULL PRIMARY KEY,
+    content VARCHAR NOT NULL,
+    is_default BOOLEAN NOT NULL
+);
+
+CREATE TABLE dest_qubes (
+    name VARCHAR NOT NULL PRIMARY KEY,
+    qube VARCHAR NOT NULL,
+    executable VARCHAR NOT NULL
 );
 """
 
@@ -61,6 +81,72 @@ class QbackupCLIManager:
             connector,
             Qube
         )
+        self.passwords: AbstractDataManager = self.data_manager_factory(
+            "passwords",
+            connector,
+            Password,
+            id_field="name"
+        )
+        self.dest_qubes: AbstractDataManager = self.data_manager_factory(
+            "dest_qubes",
+            connector,
+            DestQube,
+            id_field="name",
+        )
+
+    def list_passwords(self) -> None:
+        pprint(self.passwords.list())
+
+    def add_password(self) -> None:
+        password_model = self.passwords.get(self.args.name)
+
+        if self.args.default:
+            # Remove default password if sets to default
+            for model in self.passwords.slow_find_all(
+                is_default=True,
+            ):
+                model.is_default = False
+                self.passwords.upsert(model)
+
+        password = getpass.getpass("Password: ")
+        if password_model is None:
+            is_default = self.args.default
+
+            if not self.passwords.list():
+                print("Creating password as default")
+                is_default = True
+
+            password_model = Password(
+                name=self.args.name,
+                content=password,
+                is_default=is_default,
+            )
+        else:
+            print("Password updated!")
+            password_model.content = password
+            password_model.is_default = self.args.default
+
+        self.passwords.upsert(password_model)
+        self.passwords.save()
+
+    def list_dest_qubes(self) -> None:
+        pprint(self.dest_qubes.list())
+
+    def add_dest_qube(self) -> None:
+        dest_qube = self.dest_qubes.get(self.args.name)
+
+        if dest_qube is None:
+            dest_qube = DestQube(
+                name=self.args.name,
+                qube=self.args.qube,
+                executable=self.args.executable,
+            )
+        else:
+            dest_qube.qube = self.args.qube
+            dest_qube.executable = self.args.executable
+        
+        self.dest_qubes.upsert(dest_qube)
+        self.dest_qubes.save()
 
     def list_groups(self) -> None:
         pprint(self.groups.list())
@@ -77,7 +163,32 @@ class QbackupCLIManager:
                 f"Please create it first."
             )
 
-        group = Group(name=self.args.group, period=period.name)
+        password = self.passwords.get(self.args.passwd)
+        if password is None:
+            default_password = self.passwords.slow_find_one(
+                is_default=True,
+            )
+
+            if default_password is None:
+                raise ModelNotFound(
+                    "No password provided and any default password availabe. "
+                    "Please create a new password or provide an existing one"
+                )
+            password = default_password
+
+        dest_qube = self.dest_qubes.get(self.args.dest_qube)
+        if dest_qube is None:
+            raise ModelNotFound(
+                f"Destionation qube not found: {self.args.dest_qube}. "
+                f"Please create it first."
+            )
+        
+        group = Group(
+            name=self.args.group,
+            period=period.name,
+            password=password.name,
+            dest_qube=dest_qube.name,
+        )
 
         self.groups.upsert(group)
         self.groups.save()
@@ -187,6 +298,9 @@ class QbackupCLIManager:
             self.run_backup_for_group(group)
 
     def run_backup_for_group(self, group: Group) -> None:
+        dest_qube = self.dest_qubes.get_or_fail(group.dest_qube)
+        password = self.passwords.get_or_fail(group.password)
+
         qubes = self.qubes.slow_find_all(
             group_name=group.name
         )
@@ -197,13 +311,21 @@ class QbackupCLIManager:
             f"Starting backup for group: {group.name}"
         ], env={"DISPLAY": ":0"})
 
-        now = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-        remote_command = " ; ".join([
-            ". ~/.bash_profile",
-            f"ssh $SSH_CONN {group.name}-{now}.backup",
-        ])
+        # start qube
+        subprocess.run(
+            [
+                "qvm-start",
+                "--skip-if-running",
+                dest_qube.qube
+            ]
+        )
 
-        dest_vm = "home-backups"
+        now = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        remote_command = dest_qube.executable.format(
+            period=group.period,
+            group=group.name,
+            now=now,
+        )
 
         args = [
             "qvm-backup",
@@ -211,16 +333,17 @@ class QbackupCLIManager:
             "--compress",
             "--exclude",
             "dom0",
+            "--passphrase-file",
+            "-",
             "--dest-vm",
-            dest_vm,
+            dest_qube.qube,
             f"sh -c '{remote_command}'",
         ]
 
         for qube in qubes:
             args.append(qube.name)
 
-        password = b"abc"
-        subprocess.run(args, input=password + b"\n")
+        subprocess.run(args, input=password.content.encode() + b"\n")
 
 
 class CommandLineInterface:
@@ -327,12 +450,68 @@ class CommandLineInterface:
             function=self.cli_manager.list_qubes
         )
 
+        passwd_parser = subparsers.add_parser("password")
+        passwd_subparsers = passwd_parser.add_subparsers()
+
+        ls_passwd_parser = passwd_subparsers.add_parser("list")
+        ls_passwd_parser.set_defaults(
+            function=self.cli_manager.list_passwords
+        )
+
+        add_passwd_parser = passwd_subparsers.add_parser("add")
+        add_passwd_parser.add_argument(
+            "name",
+            help="Password name used for identification"
+        )
+        add_passwd_parser.add_argument(
+            "--default",
+            action="store_true",
+            default=False,
+            help="Set this password as the default one"
+        )
+        add_passwd_parser.set_defaults(
+            function=self.cli_manager.add_password
+        )
+
+        dest_qube_parser = subparsers.add_parser("dest-qube")
+        dest_qube_subparsers = dest_qube_parser.add_subparsers()
+
+        dest_qube_passwd_parser = dest_qube_subparsers.add_parser("list")
+        dest_qube_passwd_parser.set_defaults(
+            function=self.cli_manager.list_dest_qubes
+        )
+
+        add_dest_qube_parser = dest_qube_subparsers.add_parser("add")
+        add_dest_qube_parser.add_argument(
+            "name",
+            help="Name to identify the qube destination"
+        )
+        add_dest_qube_parser.add_argument(
+            "qube",
+            help="Qube name"
+        )
+        add_dest_qube_parser.add_argument(
+            "executable",
+            help="Executable to run for receive the backup"
+        )
+        add_dest_qube_parser.set_defaults(
+            function=self.cli_manager.add_dest_qube
+        )
+
         group_parser = subparsers.add_parser("group")
         group_subparsers = group_parser.add_subparsers()
 
         add_group_parser = group_subparsers.add_parser("add")
         add_group_parser.add_argument("group", type=str, help="Group name")
         add_group_parser.add_argument("period", type=str, help="Period")
+        add_group_parser.add_argument("dest_qube", help="Destination qube")
+        add_group_parser.add_argument(
+            "--passwd",
+            help=(
+                "Password name. If not provided, we will try "
+                "to use the default password"
+            )
+        )
         add_group_parser.set_defaults(
             function=self.cli_manager.add_group
         )
