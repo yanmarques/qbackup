@@ -3,9 +3,18 @@ Data structures for default API
 """
 
 from abc import ABC, abstractclassmethod
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from types import TracebackType
 from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Tuple, Union
+from uuid import uuid4
+
+import yaml
+
+
+class ModelNotFound(ValueError):
+    def __init__(self, *args) -> None:
+        super().__init__(*args)
 
 
 class AbstractDataConnector(ABC):
@@ -18,21 +27,13 @@ class AbstractDataConnector(ABC):
     def close(self) -> None:
         pass
 
-    @abstractclassmethod
-    def load(self) -> Any:
-        pass
-
-    @abstractclassmethod
-    def dump(self, data) -> None:
-        pass
-
     def __enter__(self) -> "AbstractDataConnector":
         self.connect()
         return self
 
     def __exit__(
         self,
-        exc_type: type[BaseException] = None,
+        exc_type: BaseException = None,
         exc_value: BaseException = None,
         traceback: TracebackType = None,
     ) -> "AbstractDataConnector":
@@ -50,79 +51,135 @@ class AbstractModel(ABC):
         return self.keyid(), asdict(self)
 
 
+def genuuid() -> str:
+    return str(uuid4())
+
+
+@dataclass
+class UUIDModelIdentifier:
+    id: str = field(default_factory=genuuid)
+
+    def keyid(self) -> Hashable:
+        return self.id
+
+
 class AbstractDataManager(ABC):
 
     def __init__(
         self,
+        prefix: str,
         connector: AbstractDataConnector,
         model_factory: Callable,
-        lazy: bool = False,
+        id_field: str = "id"
     ) -> None:
         super().__init__()
+        self._id = id_field
+        self._prefix = prefix
         self._connector = connector
         self._data = None
         self._model_factory = model_factory
+        self._init()
 
-        if not lazy:
-            self.init()
-
-    def init(self):
-        self._data = self.copy_data(
-            self._connector.load()
-        )
-
-    def save(self) -> None:
-        self._connector.dump(self._data)
-
-    @abstractclassmethod
-    def upsert(self, model: AbstractModel) -> str:
-        pass
-
-    @abstractclassmethod
-    def delete(self, keyid: Hashable) -> None:
-        pass
-
-    @abstractclassmethod
-    def find_data_by_keyid(self, keyid: Hashable) -> Dict:
-        pass
-
-    @abstractclassmethod
-    def copy_data(self, data) -> Any:
-        pass
-
-    @abstractclassmethod
-    def get_list(self) -> Iterable[Dict]:
-        pass
-
-    def get(self, keyid: Hashable) -> AbstractModel:
-        result = self.find_data_by_keyid(keyid)
-        if result is None:
-            return None
-        return self._model_factory(**result)
+    def get(self, keyid: Hashable) -> Optional[AbstractModel]:
+        return self.where(self._id, keyid)
 
     def list(self) -> List[AbstractModel]:
-        return [
-            self._model_factory(**result)
-            for result in self.get_list()
-        ]
+        return list(map(self._build_model, self._fetch_list()))
 
+    def get_or_fail(self, keyid: Hashable) -> AbstractModel:
+        model = self.get(keyid)
+        if model is None:
+            raise ModelNotFound(
+                f"Unable to find model with keyid: {keyid}"
+            )
 
-class DictDataManager(AbstractDataManager):
+        return model
+
+    def where(self, field: str, value) -> Optional[AbstractModel]:
+        result = self._find_data_by_field(field, value)
+        if result is None:
+            return None
+        return self._build_model(result)
+
+    def slow_find_all(self, **kwargs) -> Iterable[AbstractModel]:
+        found_models: Iterable[AbstractModel] = []
+
+        for model in self.list():
+            _, model_data = model.serialize()
+            if all(
+                model_data.get(key) == value
+                for key, value in kwargs.items()
+            ):
+                found_models.append(model)
+        return found_models
+
+    def slow_find_one(self, **kwargs) -> Iterable[AbstractModel]:
+        for model in self.list():
+            _, model_data = model.serialize()
+            if all(
+                model_data.get(key) == value
+                for key, value in kwargs.items()
+            ):
+                return model
+        return None
+
+    @abstractclassmethod
+    def save(self) -> None:
+        pass
+
+    @abstractclassmethod
     def upsert(self, model: AbstractModel) -> str:
-        model_id, model_data = model.serialize()
-        self._data[model_id] = model_data
+        pass
 
+    @abstractclassmethod
     def delete(self, keyid: Hashable) -> None:
-        if keyid not in self._data:
-            raise ValueError(f"Unknow model with key: {keyid}")
+        pass
 
-        self._data.pop(keyid)
+    @abstractclassmethod
+    def _find_data_by_field(self, keyid: Hashable, value) -> Optional[Any]:
+        pass
 
-    def find_data_by_keyid(self, keyid: Hashable) -> Any:
-        return self._data.get(keyid)
+    @abstractclassmethod
+    def _fetch_list(self) -> Iterable[Dict]:
+        pass
 
-    def copy_data(self, data) -> Any:
-        return data.copy()
+    def _init(self):
+        pass
 
-    def get_list(self) -> Iterable[Dict]:
-        return self._data.values()
+    def _build_model(self, kwargs: Dict) -> AbstractModel:
+        return self._model_factory(**kwargs)
+
+
+class AbstractReadWriteStream(ABC):
+    def __init__(
+        self,
+        uri: Union[Path, str],
+        default_return = None,
+    ) -> None:
+        self._uri = Path(uri)
+        self._default = default_return
+
+    @abstractclassmethod
+    def load(self) -> Any:
+        pass
+
+    @abstractclassmethod
+    def dump(self, data) -> None:
+        pass
+
+    def set_default_return(self, default_return) -> None:
+        self._default = default_return
+
+
+class YamlStream(AbstractReadWriteStream):
+    def load(self) -> Dict:
+        if not self._uri.exists():
+            return self._default
+
+        with open(self._uri) as fp:
+            data = yaml.safe_load(fp)
+            return data or self._default
+
+    def dump(self, data) -> None:
+        with open(self._uri, 'w') as fp:
+            yaml.safe_dump(data, fp)

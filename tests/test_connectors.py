@@ -1,34 +1,51 @@
+import sqlite3
 import threading
 import time
-from qbackup.connectors import LocalDataConnector
+from unittest.mock import Mock
+from qbackup.connectors import FileBackedConnector, SqliteConnector
 
 
-def test_local_connector_load_default_when_file_does_exists(tmpdir):
-    expected_first = "foo bar"
-    expected_second = ["foo", "bar"]
-    with LocalDataConnector(tmpdir, expected_first) as connector:
-        assert connector.load() == expected_first
-        connector.dump(expected_second)
-        assert connector.load() == expected_second
+def test_file_backed_connectors_are_mutually_exclusive(tmpdir):
+    shared_data = {}
 
-
-def test_local_connector_is_only_added_on_lock_release(tmpdir):
     def func():
-        with LocalDataConnector(tmpdir, {}) as conn_thread:
-            conn_thread.dump({})
+        with FileBackedConnector(tmpdir):
+            shared_data["step"] = "first"
             time.sleep(2)
+
+        with FileBackedConnector(tmpdir):
+            assert shared_data.get("step") == "second"
 
     threading.Thread(target=func, args=()).start()
 
     time.sleep(1)
 
-    with LocalDataConnector(tmpdir, {}) as connector:
-        expected = dict(
-            foo='bar',
-            baz=123,
-        )
+    with FileBackedConnector(tmpdir):
+        assert shared_data.get("step") == "first"
+        shared_data["step"] = "second"
 
-        connector.dump(expected)
-        result = connector.load()
 
-        assert result == expected
+def test_sqlite_connector_creates_and_closes_connection(monkeypatch):
+    mock_connection = Mock()
+    mock_connect = Mock(return_value=mock_connection)
+
+    monkeypatch.setattr(sqlite3, "connect", mock_connect)
+
+    with SqliteConnector("db"):
+        pass
+
+    mock_connect.assert_called_once_with("db")
+    mock_connection.close.assert_called_once()
+
+
+def test_sqlite_connector_automatically_execute_bootstrap_sql(monkeypatch):
+    sql = """CREATE TABLE test (id VARCHAR PRIMARY KEY);"""
+
+    mock_connection = Mock()
+    mock_connect = Mock(return_value=mock_connection)
+
+    monkeypatch.setattr(sqlite3, "connect", mock_connect)
+
+    with SqliteConnector("db", sql):
+        mock_connection.executescript.assert_called_once_with(sql)
+        mock_connection.commit.assert_called_once()

@@ -1,11 +1,30 @@
-import os
+from typing import Any
 from pytest import fixture
-from qbackup.connectors import LocalDataConnector
+from qbackup.api import AbstractDataConnector, AbstractReadWriteStream
+from qbackup.database import StreamDataManager
+
+
+class DummyDataConnector(AbstractDataConnector):
+    def connect(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+class DummyReadWriteStream(AbstractReadWriteStream):
+    def load(self) -> Any:
+        return self._default
+
+    def dump(self, data) -> None:
+        pass
 
 
 @fixture
-def test_connector(tmpdir):
-    connector = LocalDataConnector(tmpdir, {})
-    yield connector
-    if connector._config_file.exists():
-        os.unlink(connector._config_file)
+def dummy_connector():
+    return DummyDataConnector()
+
+
+@fixture
+def dummy_rw_stream():
+    return DummyReadWriteStream("/dev/null", {})
