@@ -8,11 +8,7 @@ import getpass
 import os
 from pathlib import Path
 from pprint import pprint
-from re import M
-import shlex
-from sqlite3 import Timestamp
 import subprocess
-from threading import current_thread
 from typing import Dict
 
 from .api import AbstractDataManager, ModelNotFound, YamlStream
@@ -294,30 +290,75 @@ class QbackupCLIManager:
             f"Starting backup: {self.args.period}"
         ], env={"DISPLAY": ":0"})
 
+        qubes_started = set()
+        failed_groups = set()
+
         for group in groups:
-            self.run_backup_for_group(group)
+            dest_qube = self.dest_qubes.get_or_fail(group.dest_qube)
+            password = self.passwords.get_or_fail(group.password)
 
-    def run_backup_for_group(self, group: Group) -> None:
-        dest_qube = self.dest_qubes.get_or_fail(group.dest_qube)
-        password = self.passwords.get_or_fail(group.password)
+            subprocess.run([
+                "notify-send",
+                "Automated Backup",
+                f"Starting backup for group: {group.name}"
+            ], env={"DISPLAY": ":0"})
 
+            # maybe start qube
+            subprocess.run(
+                [
+                    "qvm-start",
+                    "--skip-if-running",
+                    dest_qube.qube
+                ]
+            )
+
+            qubes_started.add(dest_qube.qube)
+
+            try:
+                self.run_backup_for(group, dest_qube, password)
+            except:
+                failed_groups.add(group.name)
+                subprocess.run([
+                    "notify-send",
+                    "Automated Backup",
+                    f"Failed backup for group: {group.name}"
+                ], env={"DISPLAY": ":0"})
+        
+        for dest_qube in qubes_started:
+            subprocess.run(
+                [
+                    "qvm-shutdown",
+                    dest_qube
+                ]
+            )
+        
+        if failed_groups:
+            group_list_str = ",".join(failed_groups)
+            subprocess.run([
+                "notify-send",
+                "-u",
+                "critical",
+                "Automated Backup",
+                "Backup finished. The following groups "
+                f"failed: {group_list_str}"
+            ], env={"DISPLAY": ":0"})
+        else:
+            subprocess.run([
+                "notify-send",
+                "-u",
+                "critical",
+                "Automated Backup",
+                "Backup finished. All groups succeeded!"
+            ], env={"DISPLAY": ":0"})
+        
+    def run_backup_for(
+        self,
+        group: Group,
+        dest_qube: DestQube,
+        password: Password,
+    ) -> None:
         qubes = self.qubes.slow_find_all(
             group_name=group.name
-        )
-
-        subprocess.run([
-            "notify-send",
-            "Automated Backup",
-            f"Starting backup for group: {group.name}"
-        ], env={"DISPLAY": ":0"})
-
-        # start qube
-        subprocess.run(
-            [
-                "qvm-start",
-                "--skip-if-running",
-                dest_qube.qube
-            ]
         )
 
         now = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -343,7 +384,11 @@ class QbackupCLIManager:
         for qube in qubes:
             args.append(qube.name)
 
-        subprocess.run(args, input=password.content.encode() + b"\n")
+        subprocess.run(
+            args,
+            input=password.content.encode() + b"\n",
+            check=True,
+        )
 
 
 class CommandLineInterface:
