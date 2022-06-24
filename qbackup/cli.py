@@ -407,14 +407,14 @@ class CommandLineInterface:
             args.function()
 
     def deduce_database(self):
-        if HAS_YAML:
-            from .api import YamlStream
+        # if HAS_YAML:
+        #     from .api import YamlStream
 
-            def data_manager_factory(*args, **kwargs):
-                stream = YamlStream(self.local_path)
-                return StreamDataManager(stream, *args, **kwargs)
+        #     def data_manager_factory(*args, **kwargs):
+        #         stream = YamlStream(self.local_path)
+        #         return StreamDataManager(stream, *args, **kwargs)
 
-            return (FileBackedConnector, data_manager_factory)
+        #     return (FileBackedConnector, data_manager_factory)
 
         from .connectors import SqliteConnector
         from .database import SqliteDataManager
