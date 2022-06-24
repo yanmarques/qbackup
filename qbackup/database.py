@@ -114,7 +114,6 @@ class SqliteDataManager(AbstractDataManager):
         return super()._build_model(kwargs)
 
     def _execute_sql(self, sql_str: str, *args, **kwargs) -> sqlite3.Cursor:
-        print(f"[+] running sql: {sql_str} {args} {kwargs}")
         return self._connector._conn.execute(sql_str, *args, **kwargs)
 
 

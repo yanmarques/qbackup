@@ -6,10 +6,12 @@ import argparse
 from datetime import datetime
 import getpass
 import os
-from pathlib import Path
-from pprint import pprint
 import subprocess
+import sys
+from pathlib import Path
 from typing import Dict
+
+from qbackup.utils import PrettyDumpModels
 
 from .api import AbstractDataManager, ModelNotFound, YamlStream
 from .connectors import FileBackedConnector
@@ -57,9 +59,10 @@ class QbackupCLIManager:
     def __init__(self, data_manager_factory) -> None:
         self.data_manager_factory = data_manager_factory
 
-    def initialize(self, connector, args) -> None:
+    def initialize(self, connector, args, stream) -> None:
         self.connector = connector
         self.args = args
+        self.stream = stream
         self.groups: AbstractDataManager = self.data_manager_factory(
             "groups",
             connector,
@@ -91,7 +94,7 @@ class QbackupCLIManager:
         )
 
     def list_passwords(self) -> None:
-        pprint(self.passwords.list())
+        PrettyDumpModels(self.stream, self.passwords).fetch_and_dump_list()
 
     def add_password(self) -> None:
         password_model = self.passwords.get(self.args.name)
@@ -126,7 +129,7 @@ class QbackupCLIManager:
         self.passwords.save()
 
     def list_dest_qubes(self) -> None:
-        pprint(self.dest_qubes.list())
+        PrettyDumpModels(self.stream, self.dest_qubes).fetch_and_dump_list()
 
     def add_dest_qube(self) -> None:
         dest_qube = self.dest_qubes.get(self.args.name)
@@ -145,7 +148,7 @@ class QbackupCLIManager:
         self.dest_qubes.save()
 
     def list_groups(self) -> None:
-        pprint(self.groups.list())
+        PrettyDumpModels(self.stream, self.groups).fetch_and_dump_list()
 
     def add_group(self) -> None:
         group = self.groups.get(self.args.group)
@@ -216,7 +219,7 @@ class QbackupCLIManager:
         self.groups.save()
 
     def list_qubes(self) -> None:
-        pprint(self.qubes.list())
+        PrettyDumpModels(self.stream, self.qubes).fetch_and_dump_list()
 
     def associate_qubes_to_group(self) -> None:
         self.groups.get_or_fail(self.args.group)
@@ -249,7 +252,7 @@ class QbackupCLIManager:
         self.qubes.save()
 
     def list_periods(self) -> None:
-        pprint(self.periods.list())
+        PrettyDumpModels(self.stream, self.periods).fetch_and_dump_list()
 
     def add_periods(self) -> None:
         for period_name in self.args.periods[0]:
@@ -378,7 +381,7 @@ class QbackupCLIManager:
             "-",
             "--dest-vm",
             dest_qube.qube,
-            f"sh -c '{remote_command}'",
+            remote_command,
         ]
 
         for qube in qubes:
@@ -419,7 +422,7 @@ class CommandLineInterface:
             self.bootstrap_sql = INIT_SQL
 
         with connector_factory(self.database) as connector:
-            self.cli_manager.initialize(connector, args)
+            self.cli_manager.initialize(connector, args, sys.stdout)
             args.function()
 
     def deduce_database(self):
