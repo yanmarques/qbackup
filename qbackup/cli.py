@@ -13,7 +13,7 @@ from typing import Dict
 
 from qbackup.utils import PrettyDumpModels
 
-from .api import AbstractDataManager, ModelNotFound, YamlStream
+from .api import AbstractDataManager, ModelNotFound, HAS_YAML
 from .connectors import FileBackedConnector
 from .database import StreamDataManager
 from .models import DestQube, Group, Password, Period, Qube
@@ -426,32 +426,31 @@ class CommandLineInterface:
             args.function()
 
     def deduce_database(self):
-        try:
-            import sqlite3
-            from .database import SqliteDataManager
-            from .connectors import SqliteConnector
+        if HAS_YAML:
+            from .api import YamlStream
 
-            def connector_factory(path):
-                return SqliteConnector(path, self.bootstrap_sql)
+            def data_manager_factory(*args, **kwargs):
+                stream = YamlStream(self.local_path)
+                return StreamDataManager(
+                    stream,
+                    *args,
+                    **kwargs
+                )
 
             return (
-                connector_factory,
-                SqliteDataManager
+                FileBackedConnector,
+                data_manager_factory
             )
-        except ImportError:
-            pass
 
-        def data_manager_factory(*args, **kwargs):
-            stream = YamlStream(self.local_path)
-            return StreamDataManager(
-                stream,
-                *args,
-                **kwargs
-            )
+        from .database import SqliteDataManager
+        from .connectors import SqliteConnector
+
+        def connector_factory(path):
+            return SqliteConnector(path, self.bootstrap_sql)
 
         return (
-            FileBackedConnector,
-            data_manager_factory
+            connector_factory,
+            SqliteDataManager
         )
 
     def get_parser(self) -> argparse.ArgumentParser:

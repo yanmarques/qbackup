@@ -9,8 +9,12 @@ from types import TracebackType
 from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Tuple, Union
 from uuid import uuid4
 
-import yaml
-
+HAS_YAML = False
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    pass
 
 class ModelNotFound(ValueError):
     def __init__(self, *args) -> None:
@@ -171,15 +175,16 @@ class AbstractReadWriteStream(ABC):
         self._default = default_return
 
 
-class YamlStream(AbstractReadWriteStream):
-    def load(self) -> Dict:
-        if not self._uri.exists():
-            return self._default
+if HAS_YAML:
+    class YamlStream(AbstractReadWriteStream):
+        def load(self) -> Dict:
+            if not self._uri.exists():
+                return self._default
 
-        with open(self._uri) as fp:
-            data = yaml.safe_load(fp)
-            return data or self._default
+            with open(self._uri) as fp:
+                data = yaml.safe_load(fp)
+                return data or self._default
 
-    def dump(self, data) -> None:
-        with open(self._uri, 'w') as fp:
-            yaml.safe_dump(data, fp)
+        def dump(self, data) -> None:
+            with open(self._uri, 'w') as fp:
+                yaml.safe_dump(data, fp)
