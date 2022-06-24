@@ -42,6 +42,7 @@ class Password(AbstractModel):
     def keyid(self) -> Hashable:
         return self.name
 
+
 @dataclass
 class DestQube(AbstractModel):
     name: str

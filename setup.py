@@ -16,7 +16,6 @@ setup(
     install_requires=[], # no external libs ;)
     extras_require={
         'dev': dev_requirements,
-        'yaml': ['pyaml==21.10.1'],
     },
     version='0.1.0',
     description='An automated backup service for qubes',

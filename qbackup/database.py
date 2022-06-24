@@ -2,21 +2,14 @@ import sqlite3
 from typing import Any, Dict, Hashable, Iterable, Optional
 
 from qbackup.connectors import SqliteConnector
-from .api import (
-    AbstractDataManager,
-    AbstractModel,
-    AbstractReadWriteStream,
-)
+
+from .api import AbstractDataManager, AbstractModel, AbstractReadWriteStream
 
 __all__ = ["SqliteDataManager", "StreamDataManager"]
 
 
 class SqliteDataManager(AbstractDataManager):
-    def __init__(
-        self,
-        *args,
-        **kwargs
-    ) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         if not isinstance(self._connector, SqliteConnector):
             raise TypeError(
@@ -43,17 +36,18 @@ class SqliteDataManager(AbstractDataManager):
 
         if self.get(model_id) is None:
             fields_str = ",".join(fields)
-            placeholders_str = ",".join(
-                "?" for _ in range(len(fields))
-            )
+            placeholders_str = ",".join("?" for _ in range(len(fields)))
 
-            self._execute_sql(f"""
+            self._execute_sql(
+                f"""
                 INSERT INTO
                     {self._prefix}
                 ({fields_str})
                 VALUES
                     ({placeholders_str})
-            """, list(model_data.values()))
+            """,
+                list(model_data.values()),
+            )
         else:
             placeholders_data = []
             for field in fields:
@@ -66,44 +60,55 @@ class SqliteDataManager(AbstractDataManager):
             # remove id from actual data
             model_data.pop(self._id)
 
-            self._execute_sql(f"""
+            self._execute_sql(
+                f"""
                 UPDATE
                     {self._prefix}
                 SET
                     {placeholders_str}
                 WHERE
                     {self._id} = ?
-            """, [*model_data.values(), model_id])
+            """,
+                [*model_data.values(), model_id],
+            )
 
     def delete(self, keyid: Hashable) -> None:
         self.get_or_fail(keyid)
 
-        self._execute_sql(f"""
+        self._execute_sql(
+            f"""
             DELETE FROM 
                 {self._prefix}
             WHERE
                 {self._id} = ?
-        """, [keyid])
+        """,
+            [keyid],
+        )
 
     def _find_data_by_field(self, field: str, value) -> Optional[sqlite3.Row]:
-        cursor = self._execute_sql(f"""
+        cursor = self._execute_sql(
+            f"""
             SELECT
                 *
             FROM
                 {self._prefix}
             WHERE
                 {field} = ?
-        """, [value])
+        """,
+            [value],
+        )
 
         return cursor.fetchone()
 
     def _fetch_list(self) -> Iterable[sqlite3.Row]:
-        cursor = self._execute_sql(f"""
+        cursor = self._execute_sql(
+            f"""
             SELECT
                 *
             FROM
                 {self._prefix}
-        """)
+        """
+        )
 
         return cursor.fetchall()
 
@@ -119,10 +124,7 @@ class SqliteDataManager(AbstractDataManager):
 
 class StreamDataManager(AbstractDataManager):
     def __init__(
-        self,
-        stream: AbstractReadWriteStream,
-        *args,
-        **kwargs
+        self, stream: AbstractReadWriteStream, *args, **kwargs
     ) -> None:
         self._stream = stream
         self._stream.set_default_return({})
@@ -165,5 +167,5 @@ class StreamDataManager(AbstractDataManager):
     def _branch(self) -> Dict:
         if self._prefix not in self._data:
             self._data[self._prefix] = {}
-        
+
         return self._data[self._prefix]

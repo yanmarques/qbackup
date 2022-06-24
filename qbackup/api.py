@@ -6,15 +6,27 @@ from abc import ABC, abstractclassmethod
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 from uuid import uuid4
 
 HAS_YAML = False
 try:
     import yaml
+
     HAS_YAML = True
 except ImportError:
     pass
+
 
 class ModelNotFound(ValueError):
     def __init__(self, *args) -> None:
@@ -22,7 +34,6 @@ class ModelNotFound(ValueError):
 
 
 class AbstractDataConnector(ABC):
-
     @abstractclassmethod
     def connect(self) -> None:
         pass
@@ -46,7 +57,6 @@ class AbstractDataConnector(ABC):
 
 @dataclass
 class AbstractModel(ABC):
-
     @abstractclassmethod
     def keyid(self) -> Hashable:
         pass
@@ -68,13 +78,12 @@ class UUIDModelIdentifier:
 
 
 class AbstractDataManager(ABC):
-
     def __init__(
         self,
         prefix: str,
         connector: AbstractDataConnector,
         model_factory: Callable,
-        id_field: str = "id"
+        id_field: str = "id",
     ) -> None:
         super().__init__()
         self._id = id_field
@@ -93,9 +102,7 @@ class AbstractDataManager(ABC):
     def get_or_fail(self, keyid: Hashable) -> AbstractModel:
         model = self.get(keyid)
         if model is None:
-            raise ModelNotFound(
-                f"Unable to find model with keyid: {keyid}"
-            )
+            raise ModelNotFound(f"Unable to find model with keyid: {keyid}")
 
         return model
 
@@ -111,8 +118,7 @@ class AbstractDataManager(ABC):
         for model in self.list():
             _, model_data = model.serialize()
             if all(
-                model_data.get(key) == value
-                for key, value in kwargs.items()
+                model_data.get(key) == value for key, value in kwargs.items()
             ):
                 found_models.append(model)
         return found_models
@@ -121,8 +127,7 @@ class AbstractDataManager(ABC):
         for model in self.list():
             _, model_data = model.serialize()
             if all(
-                model_data.get(key) == value
-                for key, value in kwargs.items()
+                model_data.get(key) == value for key, value in kwargs.items()
             ):
                 return model
         return None
@@ -158,7 +163,7 @@ class AbstractReadWriteStream(ABC):
     def __init__(
         self,
         uri: Union[Path, str],
-        default_return = None,
+        default_return=None,
     ) -> None:
         self._uri = Path(uri)
         self._default = default_return
@@ -176,6 +181,7 @@ class AbstractReadWriteStream(ABC):
 
 
 if HAS_YAML:
+
     class YamlStream(AbstractReadWriteStream):
         def load(self) -> Dict:
             if not self._uri.exists():
@@ -186,5 +192,5 @@ if HAS_YAML:
                 return data or self._default
 
         def dump(self, data) -> None:
-            with open(self._uri, 'w') as fp:
+            with open(self._uri, "w") as fp:
                 yaml.safe_dump(data, fp)

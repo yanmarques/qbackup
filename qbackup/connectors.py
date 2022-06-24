@@ -2,17 +2,18 @@
 Configuration utility functions
 """
 
-import os
 import fcntl
+import os
 import sqlite3
 from pathlib import Path
 from typing import Optional, cast
+
 from .api import AbstractDataConnector
 
 
 class FileBackedConnector(AbstractDataConnector):
 
-    lock_name = 'qbackup.lock'
+    lock_name = "qbackup.lock"
 
     def __init__(self, path) -> None:
         super().__init__()

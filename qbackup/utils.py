@@ -17,7 +17,7 @@ def dump_as_table(
 ) -> None:
     # Store the size of the larger item in `lines`,
     # for each header in `headers`.
-    # It is first initialized with -1 to ease further comparison 
+    # It is first initialized with -1 to ease further comparison
     largest_items: Dict[Text, int] = {header: 0 for header in headers}
 
     for line in lines:
@@ -37,12 +37,10 @@ def dump_as_table(
 
     # Create the placeholders expected by `str.format()`
     for size in largest_items.values():
-        placeholder_list.append(
-            "".join(["{:<", str(size), "}"])
-        )
+        placeholder_list.append("".join(["{:<", str(size), "}"]))
 
     placeholder = " ".join(placeholder_list)
-    
+
     all_lines = []
 
     if dump_headers:
@@ -56,9 +54,7 @@ def dump_as_table(
 
 class PrettyDumpModels:
     def __init__(
-        self,
-        fp: TextIOWrapper,
-        manager: AbstractDataManager
+        self, fp: TextIOWrapper, manager: AbstractDataManager
     ) -> None:
         self.fp = fp
         self._manager = manager

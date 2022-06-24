@@ -17,21 +17,15 @@ server-aa:
 lint/black:
 	black --line-length 79 --diff --check qbackup/
 
-lint/isort:
-	isort --line-length 79 --diff --check-only qbackup/
-
 lint/mypy:
 	mypy --pretty qbackup/
 
-lint: lint/black lint/isort lint/mypy
+lint: lint/black lint/mypy
 
 format/black:
 	black --line-length 79 qbackup/
 
-format/isort:
-	isort --line-length 79 qbackup/
-
-format: format/black format/isort
+format: format/black
 
 test:
 	pytest
