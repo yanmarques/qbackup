@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+if [ -z "$1" ]; then
+	echo "Usage: $0 PATH" >&2
+	exit 1
+fi
+
+if [ -e "$1" ]; then
+	echo "File exists: $1" >&2
+	exit 2
+fi
+
+dir_path="$(dirname "$1")"
+
+# Save file to disk
+sync --file-system -- "$dir_path"
+dd bs=128K iflag=fullblock conv=fsync of="$1"
+sync -- "$dir_path"

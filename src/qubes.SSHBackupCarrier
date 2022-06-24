@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+. ~/.bash_profile
+
+if [ -z "${SSH_CONN:-}" ]; then
+	echo "[-] SSH_CONN variable is not yet configured" 1>&2
+	exit 1
+fi
+
+exec ssh "$SSH_CONN" "$1"
