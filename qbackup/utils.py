@@ -51,7 +51,8 @@ def dump_as_table(
     for line in lines:
         all_lines.append(placeholder.format(*line))
 
-    fp.write("\n".join(all_lines))
+    # Write all separated and trailed by a line feed 
+    fp.write("\n".join(all_lines) + "\n")
 
 
 class PrettyDumpModels:
