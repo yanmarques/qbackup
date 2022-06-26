@@ -1,5 +1,6 @@
+from functools import cached_property
 import sqlite3
-from typing import Any, Dict, Hashable, Iterable, Optional
+from typing import Any, Dict, Hashable, Iterable, Optional, cast
 
 from qbackup.connectors import SqliteConnector
 
@@ -18,12 +19,12 @@ class SqliteDataManager(AbstractDataManager):
             )
 
         # Setup sqlite connection
-        self._connector._conn.row_factory = sqlite3.Row
+        self._sqlite_connection.row_factory = sqlite3.Row
 
     def save(self) -> None:
-        self._connector._conn.commit()
+        self._sqlite_connection.commit()
 
-    def upsert(self, model: AbstractModel) -> str:
+    def upsert(self, model: AbstractModel) -> Hashable:
         model_id, model_data = model.serialize()
 
         if not isinstance(model_data, Dict):
@@ -71,6 +72,7 @@ class SqliteDataManager(AbstractDataManager):
             """,
                 [*model_data.values(), model_id],
             )
+        return model_id
 
     def delete(self, keyid: Hashable) -> None:
         self.get_or_fail(keyid)
@@ -85,7 +87,9 @@ class SqliteDataManager(AbstractDataManager):
             [keyid],
         )
 
-    def _find_data_by_field(self, field: str, value) -> Optional[sqlite3.Row]:
+    def _find_data_by_field(
+        self, field: Hashable, value
+    ) -> Optional[sqlite3.Row]:
         cursor = self._execute_sql(
             f"""
             SELECT
@@ -100,7 +104,7 @@ class SqliteDataManager(AbstractDataManager):
 
         return cursor.fetchone()
 
-    def _fetch_list(self) -> Iterable[sqlite3.Row]:
+    def _fetch_list(self) -> Iterable[Dict]:
         cursor = self._execute_sql(
             f"""
             SELECT
@@ -118,8 +122,17 @@ class SqliteDataManager(AbstractDataManager):
 
         return super()._build_model(kwargs)
 
+    @property
+    def _sqlite_connection(self) -> sqlite3.Connection:
+        connector: SqliteConnector = cast(SqliteConnector, self._connector)
+
+        if not connector._conn:
+            raise RuntimeError("Missing Sqlite connection object")
+
+        return connector._conn
+
     def _execute_sql(self, sql_str: str, *args, **kwargs) -> sqlite3.Cursor:
-        return self._connector._conn.execute(sql_str, *args, **kwargs)
+        return self._sqlite_connection.execute(sql_str, *args, **kwargs)
 
 
 class StreamDataManager(AbstractDataManager):
@@ -137,20 +150,21 @@ class StreamDataManager(AbstractDataManager):
                 f"Unknown loaded data from stream: "
                 f"expected data type `Dict`, found {type(data)}"
             )
-        self._data = data.copy()
+        self._data: Dict = data.copy()
 
     def save(self) -> None:
         self._stream.dump(self._data)
 
-    def upsert(self, model: AbstractModel) -> str:
+    def upsert(self, model: AbstractModel) -> Hashable:
         model_id, model_data = model.serialize()
         self._branch[model_id] = model_data
+        return model_id
 
     def delete(self, keyid: Hashable) -> None:
         self.get_or_fail(keyid)
         self._branch.pop(keyid)
 
-    def _find_data_by_field(self, field: str, value) -> Optional[Any]:
+    def _find_data_by_field(self, field: Hashable, value) -> Optional[Any]:
         # Just be smart, use O(1) when we are looking for the id
         if field == self._id:
             return self._branch.get(value)

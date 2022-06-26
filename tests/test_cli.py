@@ -1,6 +1,11 @@
 from collections import namedtuple
+import sys
 from pytest import fixture
 import pytest
+from qbackup.models import (
+    Password,
+    DestQube,
+)
 from qbackup.api import ModelNotFound
 from qbackup.cli import QbackupCLIManager
 from qbackup.database import StreamDataManager
@@ -16,10 +21,26 @@ def cli_manager(request, dummy_connector, dummy_rw_stream):
         )
 
     manager = QbackupCLIManager(data_manager_factory)
+
+    # Add default params
+    request.param.setdefault("passwd", "baz-password-default")
+    request.param.setdefault("dest_qube", "bar-dest-qube")
+
     namespace = namedtuple("Namespace", request.param.keys())
     args = namespace(**request.param)
-    manager.initialize(dummy_connector, args)
+    manager.initialize(dummy_connector, args, sys.stdout)
     
+    manager.passwords.upsert(Password(
+        name="baz-password-default",
+        content="foo",
+        is_default=True,
+    ))
+
+    manager.dest_qubes.upsert(DestQube(
+        name="bar-dest-qube",
+        qube=""
+    ))
+
     return manager
 
 

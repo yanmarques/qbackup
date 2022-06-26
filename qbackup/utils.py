@@ -3,14 +3,13 @@ Utility functions
 """
 
 from dataclasses import asdict, fields
-from io import TextIOWrapper
-from typing import Dict, List, Text
+from typing import Dict, List, Text, TextIO
 
 from .api import AbstractDataManager
 
 
 def dump_as_table(
-    fp: TextIOWrapper,
+    fp: TextIO,
     headers: List[Text],
     lines: List[List[Text]],
     dump_headers: bool = True,
@@ -51,14 +50,12 @@ def dump_as_table(
     for line in lines:
         all_lines.append(placeholder.format(*line))
 
-    # Write all separated and trailed by a line feed 
+    # Write all separated and trailed by a line feed
     fp.write("\n".join(all_lines) + "\n")
 
 
 class PrettyDumpModels:
-    def __init__(
-        self, fp: TextIOWrapper, manager: AbstractDataManager
-    ) -> None:
+    def __init__(self, fp: TextIO, manager: AbstractDataManager) -> None:
         self.fp = fp
         self._manager = manager
         self._headers = [

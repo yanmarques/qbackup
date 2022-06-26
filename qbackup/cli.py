@@ -9,9 +9,23 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import (
+    Callable,
+    Dict,
+    Iterable,
+    Optional,
+    Sequence,
+    Set,
+    TextIO,
+    cast,
+)
 
-from .api import HAS_YAML, AbstractDataManager, ModelNotFound
+from .api import (
+    HAS_YAML,
+    AbstractDataConnector,
+    AbstractDataManager,
+    ModelNotFound,
+)
 from .connectors import FileBackedConnector
 from .database import StreamDataManager
 from .models import DestQube, Group, Password, Period, Qube
@@ -54,26 +68,29 @@ CREATE TABLE dest_qubes (
 
 
 class QbackupCLIManager:
-    def __init__(self, data_manager_factory) -> None:
-        self.data_manager_factory = data_manager_factory
-
-    def initialize(self, connector, args, stream) -> None:
+    def initialize(
+        self,
+        data_manager_factory: Callable,
+        connector: AbstractDataConnector,
+        args: argparse.Namespace,
+        stream: TextIO,
+    ) -> None:
         self.connector = connector
         self.args = args
         self.stream = stream
-        self.groups: AbstractDataManager = self.data_manager_factory(
+        self.groups: AbstractDataManager = data_manager_factory(
             "groups", connector, Group, id_field="name"
         )
-        self.periods: AbstractDataManager = self.data_manager_factory(
+        self.periods: AbstractDataManager = data_manager_factory(
             "periods", connector, Period, id_field="name"
         )
-        self.qubes: AbstractDataManager = self.data_manager_factory(
+        self.qubes: AbstractDataManager = data_manager_factory(
             "qubes", connector, Qube
         )
-        self.passwords: AbstractDataManager = self.data_manager_factory(
+        self.passwords: AbstractDataManager = data_manager_factory(
             "passwords", connector, Password, id_field="name"
         )
-        self.dest_qubes: AbstractDataManager = self.data_manager_factory(
+        self.dest_qubes: AbstractDataManager = data_manager_factory(
             "dest_qubes",
             connector,
             DestQube,
@@ -84,13 +101,20 @@ class QbackupCLIManager:
         PrettyDumpModels(self.stream, self.passwords).fetch_and_dump_list()
 
     def add_password(self) -> None:
-        password_model = self.passwords.get(self.args.name)
+        password_model = cast(
+            Optional[Password], self.passwords.get(self.args.name)
+        )
 
         if self.args.default:
+            password_list = cast(
+                Iterable[Password],
+                self.passwords.slow_find_all(
+                    is_default=True,
+                ),
+            )
+
             # Remove default password if sets to default
-            for model in self.passwords.slow_find_all(
-                is_default=True,
-            ):
+            for model in password_list:
                 model.is_default = False
                 self.passwords.upsert(model)
 
@@ -119,7 +143,9 @@ class QbackupCLIManager:
         PrettyDumpModels(self.stream, self.dest_qubes).fetch_and_dump_list()
 
     def add_dest_qube(self) -> None:
-        dest_qube = self.dest_qubes.get(self.args.name)
+        dest_qube = cast(
+            Optional[DestQube], self.dest_qubes.get(self.args.name)
+        )
 
         if dest_qube is None:
             dest_qube = DestQube(
@@ -142,17 +168,24 @@ class QbackupCLIManager:
         if group is not None:
             raise ValueError("Group already exists")
 
-        period = self.periods.get(self.args.period)
+        period = cast(Optional[Period], self.periods.get(self.args.period))
+
         if period is None:
             raise ModelNotFound(
                 f"Period not found: {self.args.period}. "
                 f"Please create it first."
             )
 
-        password = self.passwords.get(self.args.passwd)
+        password = cast(
+            Optional[Password], self.passwords.get(self.args.passwd)
+        )
+
         if password is None:
-            default_password = self.passwords.slow_find_one(
-                is_default=True,
+            default_password = cast(
+                Optional[Password],
+                self.passwords.slow_find_one(
+                    is_default=True,
+                ),
             )
 
             if default_password is None:
@@ -162,7 +195,9 @@ class QbackupCLIManager:
                 )
             password = default_password
 
-        dest_qube = self.dest_qubes.get(self.args.dest_qube)
+        dest_qube = cast(
+            Optional[DestQube], self.dest_qubes.get(self.args.dest_qube)
+        )
         if dest_qube is None:
             raise ModelNotFound(
                 f"Destionation qube not found: {self.args.dest_qube}. "
@@ -180,12 +215,15 @@ class QbackupCLIManager:
         self.groups.save()
 
     def delete_qubes_from_group(self) -> None:
-        group = self.groups.get_or_fail(self.args.group)
+        group = cast(Group, self.groups.get_or_fail(self.args.group))
 
         for qube in self.args.qubes[0]:
-            qube_model = self.qubes.slow_find_one(
-                name=qube,
-                group_name=group.name,
+            qube_model = cast(
+                Optional[Qube],
+                self.qubes.slow_find_one(
+                    name=qube,
+                    group_name=group.name,
+                ),
             )
 
             if qube_model is None:
@@ -195,7 +233,12 @@ class QbackupCLIManager:
         self.qubes.save()
 
     def delete_group(self) -> None:
-        for qube in self.qubes.slow_find_all(group_name=self.args.group):
+        qubes = cast(
+            Iterable[Qube],
+            self.qubes.slow_find_all(group_name=self.args.group),
+        )
+
+        for qube in qubes:
             self.qubes.delete(qube.id)
 
         self.groups.delete(self.args.group)
@@ -223,9 +266,12 @@ class QbackupCLIManager:
 
     def disassociate_qubes_from_group(self) -> None:
         for qube_name in self.args.qubes[0]:
-            qube = self.qubes.slow_find_one(
-                name=qube_name,
-                group_name=self.args.group,
+            qube = cast(
+                Optional[Qube],
+                self.qubes.slow_find_one(
+                    name=qube_name,
+                    group_name=self.args.group,
+                ),
             )
 
             if qube is None:
@@ -257,7 +303,9 @@ class QbackupCLIManager:
         self.periods.save()
 
     def run_backup(self) -> None:
-        groups = self.groups.slow_find_all(period=self.args.period)
+        groups = cast(
+            Iterable[Group], self.groups.slow_find_all(period=self.args.period)
+        )
 
         if not groups:
             raise ModelNotFound(
@@ -275,12 +323,17 @@ class QbackupCLIManager:
             env={"DISPLAY": ":0"},
         )
 
-        qubes_started = set()
-        failed_groups = set()
+        qubes_started: Set[str] = set()
+        failed_groups: Set[str] = set()
 
         for group in groups:
-            dest_qube = self.dest_qubes.get_or_fail(group.dest_qube)
-            password = self.passwords.get_or_fail(group.password)
+            dest_qube = cast(
+                DestQube, self.dest_qubes.get_or_fail(group.dest_qube)
+            )
+
+            password = cast(
+                Password, self.passwords.get_or_fail(group.password)
+            )
 
             subprocess.run(
                 [
@@ -309,8 +362,8 @@ class QbackupCLIManager:
                     env={"DISPLAY": ":0"},
                 )
 
-        for dest_qube in qubes_started:
-            subprocess.run(["qvm-shutdown", dest_qube])
+        for qube_started in qubes_started:
+            subprocess.run(["qvm-shutdown", qube_started])
 
         if failed_groups:
             group_list_str = ",".join(failed_groups)
@@ -343,7 +396,9 @@ class QbackupCLIManager:
         dest_qube: DestQube,
         password: Password,
     ) -> None:
-        qubes = self.qubes.slow_find_all(group_name=group.name)
+        qubes = cast(
+            Iterable[Qube], self.qubes.slow_find_all(group_name=group.name)
+        )
 
         now = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
         remote_command = dest_qube.executable.format(
@@ -377,36 +432,42 @@ class QbackupCLIManager:
 
 class CommandLineInterface:
     def __init__(self) -> None:
-        self.local_path: Path = None
-        self.database: Path = None
-        self.bootstrap_sql: str = None
-        self.cli_manager: QbackupCLIManager = None
+        # self.local_path: Optional[Path] = None
+        # self.database: Optional[Path] = None
+        # self.bootstrap_sql: Optional[str] = None
+        # self.cli_manager: Optional[QbackupCLIManager] = None
+        pass
 
-    def run(self, cli_args: Dict[str, str] = None) -> None:
-        connector_factory, data_manager_factory = self.deduce_database()
+    def run(self, cli_args: Sequence[str] = None) -> None:
 
-        self.cli_manager = QbackupCLIManager(data_manager_factory)
+        cli_manager = QbackupCLIManager()
 
-        parser = self.get_parser()
+        parser = self.get_parser(cli_manager)
         args = parser.parse_args(cli_args)
 
         if not hasattr(args, "function"):
             parser.error("Missing command")
 
-        self.local_path = Path(args.config).expanduser()
-        os.makedirs(self.local_path, exist_ok=True)
+        local_path = Path(args.config).expanduser()
+        os.makedirs(local_path, exist_ok=True)
 
-        self.database = self.local_path / "db"
+        database = local_path / "db"
 
-        self.bootstrap_sql = None
-        if not self.database.exists():
-            self.bootstrap_sql = INIT_SQL
+        bootstrap_sql = None
+        if not database.exists():
+            bootstrap_sql = INIT_SQL
 
-        with connector_factory(self.database) as connector:
-            self.cli_manager.initialize(connector, args, sys.stdout)
+        connector_factory, data_manager_factory = self.deduce_database(
+            bootstrap_sql
+        )
+
+        with connector_factory(database) as connector:
+            cli_manager.initialize(
+                data_manager_factory, connector, args, sys.stdout
+            )
             args.function()
 
-    def deduce_database(self):
+    def deduce_database(self, bootstrap_sql: Optional[str]):
         # if HAS_YAML:
         #     from .api import YamlStream
 
@@ -420,11 +481,13 @@ class CommandLineInterface:
         from .database import SqliteDataManager
 
         def connector_factory(path):
-            return SqliteConnector(path, self.bootstrap_sql)
+            return SqliteConnector(path, bootstrap_sql)
 
         return (connector_factory, SqliteDataManager)
 
-    def get_parser(self) -> argparse.ArgumentParser:
+    def get_parser(
+        self, cli_manager: QbackupCLIManager
+    ) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser()
 
         parser.add_argument(
@@ -442,7 +505,7 @@ class CommandLineInterface:
 
         run_parser = subparsers.add_parser("run")
         run_parser.add_argument("period", type=str)
-        run_parser.set_defaults(function=self.cli_manager.run_backup)
+        run_parser.set_defaults(function=cli_manager.run_backup)
 
         qube_parser = subparsers.add_parser("qube")
         qube_subparsers = qube_parser.add_subparsers()
@@ -451,24 +514,24 @@ class CommandLineInterface:
         del_qube_parser.add_argument("group", type=str, help="Group name")
         del_qube_parser.add_argument("qubes", action="append", nargs="+")
         del_qube_parser.set_defaults(
-            function=self.cli_manager.disassociate_qubes_from_group
+            function=cli_manager.disassociate_qubes_from_group
         )
 
         add_qube_parser = qube_subparsers.add_parser("add")
         add_qube_parser.add_argument("group", type=str, help="Group name")
         add_qube_parser.add_argument("qubes", action="append", nargs="+")
         add_qube_parser.set_defaults(
-            function=self.cli_manager.associate_qubes_to_group
+            function=cli_manager.associate_qubes_to_group
         )
 
         ls_qube_parser = qube_subparsers.add_parser("list")
-        ls_qube_parser.set_defaults(function=self.cli_manager.list_qubes)
+        ls_qube_parser.set_defaults(function=cli_manager.list_qubes)
 
         passwd_parser = subparsers.add_parser("password")
         passwd_subparsers = passwd_parser.add_subparsers()
 
         ls_passwd_parser = passwd_subparsers.add_parser("list")
-        ls_passwd_parser.set_defaults(function=self.cli_manager.list_passwords)
+        ls_passwd_parser.set_defaults(function=cli_manager.list_passwords)
 
         add_passwd_parser = passwd_subparsers.add_parser("add")
         add_passwd_parser.add_argument(
@@ -480,14 +543,14 @@ class CommandLineInterface:
             default=False,
             help="Set this password as the default one",
         )
-        add_passwd_parser.set_defaults(function=self.cli_manager.add_password)
+        add_passwd_parser.set_defaults(function=cli_manager.add_password)
 
         dest_qube_parser = subparsers.add_parser("dest-qube")
         dest_qube_subparsers = dest_qube_parser.add_subparsers()
 
         dest_qube_passwd_parser = dest_qube_subparsers.add_parser("list")
         dest_qube_passwd_parser.set_defaults(
-            function=self.cli_manager.list_dest_qubes
+            function=cli_manager.list_dest_qubes
         )
 
         add_dest_qube_parser = dest_qube_subparsers.add_parser("add")
@@ -498,9 +561,7 @@ class CommandLineInterface:
         add_dest_qube_parser.add_argument(
             "executable", help="Executable to run for receive the backup"
         )
-        add_dest_qube_parser.set_defaults(
-            function=self.cli_manager.add_dest_qube
-        )
+        add_dest_qube_parser.set_defaults(function=cli_manager.add_dest_qube)
 
         group_parser = subparsers.add_parser("group")
         group_subparsers = group_parser.add_subparsers()
@@ -516,14 +577,14 @@ class CommandLineInterface:
                 "to use the default password"
             ),
         )
-        add_group_parser.set_defaults(function=self.cli_manager.add_group)
+        add_group_parser.set_defaults(function=cli_manager.add_group)
 
         del_group_parser = group_subparsers.add_parser("del")
         del_group_parser.add_argument("group", help="Group name")
-        del_group_parser.set_defaults(function=self.cli_manager.delete_group)
+        del_group_parser.set_defaults(function=cli_manager.delete_group)
 
         ls_group_parser = group_subparsers.add_parser("list")
-        ls_group_parser.set_defaults(function=self.cli_manager.list_groups)
+        ls_group_parser.set_defaults(function=cli_manager.list_groups)
 
         period_subparsers = subparsers.add_parser("period").add_subparsers()
 
@@ -531,22 +592,20 @@ class CommandLineInterface:
         del_period_parser.add_argument(
             "periods", action="append", nargs="+", help="Period name"
         )
-        del_period_parser.set_defaults(
-            function=self.cli_manager.delete_periods
-        )
+        del_period_parser.set_defaults(function=cli_manager.delete_periods)
 
         add_period_parser = period_subparsers.add_parser("add")
         add_period_parser.add_argument(
             "periods", action="append", nargs="+", help="Period name"
         )
-        add_period_parser.set_defaults(function=self.cli_manager.add_periods)
+        add_period_parser.set_defaults(function=cli_manager.add_periods)
 
         ls_period_parser = period_subparsers.add_parser("list")
-        ls_period_parser.set_defaults(function=self.cli_manager.list_periods)
+        ls_period_parser.set_defaults(function=cli_manager.list_periods)
 
         return parser
 
 
-def main(args: Dict[str, str] = None):
+def main(args: Sequence[str] = None):
     cli = CommandLineInterface()
     cli.run(args)

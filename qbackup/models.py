@@ -3,9 +3,9 @@ Models used for configuration
 """
 
 from dataclasses import dataclass, field
-from typing import Hashable
+from typing import Hashable, Optional
 
-from .api import AbstractModel, UUIDModelIdentifier
+from .api import AbstractModel, UUIDIdentifierMixin
 
 
 @dataclass
@@ -28,9 +28,9 @@ class Period(AbstractModel):
 
 
 @dataclass
-class Qube(UUIDModelIdentifier, AbstractModel):
-    name: str = field(default=None)
-    group_name: str = field(default=None)
+class Qube(UUIDIdentifierMixin, AbstractModel):
+    name: str
+    group_name: str
 
 
 @dataclass
