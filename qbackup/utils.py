@@ -40,7 +40,7 @@ def dump_as_table(
 
     # Separate each field by a TAB. Compliant with `cut` and `awk`
     # and most shell programs
-    placeholder = "\t".join(placeholder_list)
+    placeholder = " ".join(placeholder_list)
 
     all_lines = []
 

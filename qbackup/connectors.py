@@ -18,7 +18,7 @@ class FileBackedConnector(AbstractDataConnector):
     def __init__(self, path) -> None:
         super().__init__()
         self._lock_file: Path = Path(path) / self.lock_name
-        self._lock_file_fd: int = -1
+        self._lock_file_fd: Optional[int] = None
 
     def connect(self) -> None:
         open_mode = os.O_RDWR | os.O_CREAT | os.O_TRUNC
@@ -36,7 +36,7 @@ class FileBackedConnector(AbstractDataConnector):
         #   https://stackoverflow.com/questions/17708885/flock-removing-locked-file-without-race-condition
         if self._lock_file_fd:
             fd = cast(int, self._lock_file_fd)
-            self._lock_file_fd = -1
+            self._lock_file_fd = None
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
 
