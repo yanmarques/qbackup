@@ -7,17 +7,15 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: fedora:32
-      volumes: 
-        - ${{ github.workspace }}:/app
     steps:
-    - name: Set up Python
-      run: ls -la /
-
-    - name: Set up Python
-      run: ls -la /app
-
-    - name: Set up Python
-      run: ls -la /github/**/*
-
-    - name: Set up Python
-      run: ls -la $HOME/**/*
+    - uses: actions/checkout@v3
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install .[dev]
+    - name: Analysing the code
+      run: |
+        make lint
+    - name: Testing the code with pytest
+      run: |
+        make test
