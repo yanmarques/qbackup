@@ -87,9 +87,7 @@ class SqliteDataManager(AbstractDataManager):
             [keyid],
         )
 
-    def _find_data_by_field(
-        self, field: str, value
-    ) -> Optional[sqlite3.Row]:
+    def _find_data_by_field(self, field: str, value) -> Optional[sqlite3.Row]:
         cursor = self._execute_sql(
             f"""
             SELECT
