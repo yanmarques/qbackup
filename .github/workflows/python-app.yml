@@ -1,4 +1,4 @@
-name: Python Application
+name: Python lint and test
 
 on: [pull_request]
 
