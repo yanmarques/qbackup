@@ -12,3 +12,12 @@ jobs:
     steps:
     - name: Set up Python
       run: ls -la /
+
+    - name: Set up Python
+      run: ls -la /app
+
+    - name: Set up Python
+      run: find /github/
+
+    - name: Set up Python
+      run: find $HOME
