@@ -12,7 +12,7 @@ jobs:
     - name: Install dependencies
       run: |
         dnf install -y python3 python3-pip
-        python -m pip install --upgrade pip
+        python3 -m pip install --upgrade pip
         pip install .[dev]
     - name: Analysing the code
       run: |
