@@ -17,7 +17,7 @@ jobs:
       run: ls -la /app
 
     - name: Set up Python
-      run: find /github/
+      run: ls -la /github/**/*
 
     - name: Set up Python
-      run: find $HOME
+      run: ls -la $HOME/**/*
