@@ -14,7 +14,7 @@ def test_dump_lines_respecting_largest_item():
         "Name    Age City    ",
         "John    999 No Where",
         "Manoela 111 A city  ",
-    ])
+    ]) + "\n"
 
     dump_as_table(fp, headers, lines)
 
@@ -26,7 +26,7 @@ def test_dump_only_headers_when_empty_lines():
     headers = ["Name", "Age", "City"]
     lines = []
 
-    expected_dump = "Name Age City"
+    expected_dump = "Name Age City\n"
 
     dump_as_table(fp, headers, lines)
 

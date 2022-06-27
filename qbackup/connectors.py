@@ -2,22 +2,23 @@
 Configuration utility functions
 """
 
-import os
 import fcntl
+import os
 import sqlite3
 from pathlib import Path
 from typing import Optional, cast
+
 from .api import AbstractDataConnector
 
 
 class FileBackedConnector(AbstractDataConnector):
 
-    lock_name = 'qbackup.lock'
+    lock_name = "qbackup.lock"
 
     def __init__(self, path) -> None:
         super().__init__()
         self._lock_file: Path = Path(path) / self.lock_name
-        self._lock_file_fd: int = None
+        self._lock_file_fd: Optional[int] = None
 
     def connect(self) -> None:
         open_mode = os.O_RDWR | os.O_CREAT | os.O_TRUNC
@@ -26,6 +27,7 @@ class FileBackedConnector(AbstractDataConnector):
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             os.close(fd)
+            raise
         else:
             self._lock_file_fd = fd
 
@@ -54,4 +56,5 @@ class SqliteConnector(AbstractDataConnector):
             self._conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        if self._conn:
+            self._conn.close()

@@ -3,21 +3,20 @@ Utility functions
 """
 
 from dataclasses import asdict, fields
-from io import TextIOWrapper
-from typing import Dict, List, Text
+from typing import Dict, List, Text, TextIO
 
 from .api import AbstractDataManager
 
 
 def dump_as_table(
-    fp: TextIOWrapper,
+    fp: TextIO,
     headers: List[Text],
     lines: List[List[Text]],
     dump_headers: bool = True,
 ) -> None:
     # Store the size of the larger item in `lines`,
     # for each header in `headers`.
-    # It is first initialized with -1 to ease further comparison 
+    # It is first initialized with -1 to ease further comparison
     largest_items: Dict[Text, int] = {header: 0 for header in headers}
 
     for line in lines:
@@ -37,12 +36,12 @@ def dump_as_table(
 
     # Create the placeholders expected by `str.format()`
     for size in largest_items.values():
-        placeholder_list.append(
-            "".join(["{:<", str(size), "}"])
-        )
+        placeholder_list.append("".join(["{:<", str(size), "}"]))
 
+    # Separate each field by a TAB. Compliant with `cut` and `awk`
+    # and most shell programs
     placeholder = " ".join(placeholder_list)
-    
+
     all_lines = []
 
     if dump_headers:
@@ -51,15 +50,12 @@ def dump_as_table(
     for line in lines:
         all_lines.append(placeholder.format(*line))
 
-    fp.write("\n".join(all_lines))
+    # Write all separated and trailed by a line feed
+    fp.write("\n".join(all_lines) + "\n")
 
 
 class PrettyDumpModels:
-    def __init__(
-        self,
-        fp: TextIOWrapper,
-        manager: AbstractDataManager
-    ) -> None:
+    def __init__(self, fp: TextIO, manager: AbstractDataManager) -> None:
         self.fp = fp
         self._manager = manager
         self._headers = [

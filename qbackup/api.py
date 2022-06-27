@@ -2,14 +2,30 @@
 Data structures for default API
 """
 
-from abc import ABC, abstractclassmethod
-from dataclasses import asdict, dataclass, field
+from abc import ABC, abstractmethod
+from dataclasses import asdict
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 from uuid import uuid4
 
-import yaml
+HAS_YAML = False
+try:
+    import yaml
+
+    HAS_YAML = True
+except ImportError:
+    pass
 
 
 class ModelNotFound(ValueError):
@@ -18,12 +34,11 @@ class ModelNotFound(ValueError):
 
 
 class AbstractDataConnector(ABC):
-
-    @abstractclassmethod
+    @abstractmethod
     def connect(self) -> None:
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def close(self) -> None:
         pass
 
@@ -36,14 +51,12 @@ class AbstractDataConnector(ABC):
         exc_type: BaseException = None,
         exc_value: BaseException = None,
         traceback: TracebackType = None,
-    ) -> "AbstractDataConnector":
-        self.close()
+    ) -> None:
+        return self.close()
 
 
-@dataclass
 class AbstractModel(ABC):
-
-    @abstractclassmethod
+    @abstractmethod
     def keyid(self) -> Hashable:
         pass
 
@@ -51,32 +64,18 @@ class AbstractModel(ABC):
         return self.keyid(), asdict(self)
 
 
-def genuuid() -> str:
-    return str(uuid4())
-
-
-@dataclass
-class UUIDModelIdentifier:
-    id: str = field(default_factory=genuuid)
-
-    def keyid(self) -> Hashable:
-        return self.id
-
-
 class AbstractDataManager(ABC):
-
     def __init__(
         self,
         prefix: str,
         connector: AbstractDataConnector,
         model_factory: Callable,
-        id_field: str = "id"
+        id_field: str = "id",
     ) -> None:
         super().__init__()
         self._id = id_field
         self._prefix = prefix
         self._connector = connector
-        self._data = None
         self._model_factory = model_factory
         self._init()
 
@@ -89,9 +88,7 @@ class AbstractDataManager(ABC):
     def get_or_fail(self, keyid: Hashable) -> AbstractModel:
         model = self.get(keyid)
         if model is None:
-            raise ModelNotFound(
-                f"Unable to find model with keyid: {keyid}"
-            )
+            raise ModelNotFound(f"Unable to find model with keyid: {keyid}")
 
         return model
 
@@ -102,44 +99,42 @@ class AbstractDataManager(ABC):
         return self._build_model(result)
 
     def slow_find_all(self, **kwargs) -> Iterable[AbstractModel]:
-        found_models: Iterable[AbstractModel] = []
+        found_models: List[AbstractModel] = []
 
         for model in self.list():
             _, model_data = model.serialize()
             if all(
-                model_data.get(key) == value
-                for key, value in kwargs.items()
+                model_data.get(key) == value for key, value in kwargs.items()
             ):
                 found_models.append(model)
         return found_models
 
-    def slow_find_one(self, **kwargs) -> Iterable[AbstractModel]:
+    def slow_find_one(self, **kwargs) -> Optional[AbstractModel]:
         for model in self.list():
             _, model_data = model.serialize()
             if all(
-                model_data.get(key) == value
-                for key, value in kwargs.items()
+                model_data.get(key) == value for key, value in kwargs.items()
             ):
                 return model
         return None
 
-    @abstractclassmethod
+    @abstractmethod
     def save(self) -> None:
         pass
 
-    @abstractclassmethod
-    def upsert(self, model: AbstractModel) -> str:
+    @abstractmethod
+    def upsert(self, model: AbstractModel) -> Hashable:
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def delete(self, keyid: Hashable) -> None:
         pass
 
-    @abstractclassmethod
-    def _find_data_by_field(self, keyid: Hashable, value) -> Optional[Any]:
+    @abstractmethod
+    def _find_data_by_field(self, keyid: str, value) -> Optional[Any]:
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def _fetch_list(self) -> Iterable[Dict]:
         pass
 
@@ -154,32 +149,34 @@ class AbstractReadWriteStream(ABC):
     def __init__(
         self,
         uri: Union[Path, str],
-        default_return = None,
+        default_return=None,
     ) -> None:
         self._uri = Path(uri)
         self._default = default_return
 
-    @abstractclassmethod
+    @abstractmethod
     def load(self) -> Any:
         pass
 
-    @abstractclassmethod
-    def dump(self, data) -> None:
+    @abstractmethod
+    def dump(self, data: Any) -> None:
         pass
 
     def set_default_return(self, default_return) -> None:
         self._default = default_return
 
 
-class YamlStream(AbstractReadWriteStream):
-    def load(self) -> Dict:
-        if not self._uri.exists():
-            return self._default
+if HAS_YAML:
 
-        with open(self._uri) as fp:
-            data = yaml.safe_load(fp)
-            return data or self._default
+    class YamlStream(AbstractReadWriteStream):
+        def load(self) -> Any:
+            if not self._uri.exists():
+                return self._default
 
-    def dump(self, data) -> None:
-        with open(self._uri, 'w') as fp:
-            yaml.safe_dump(data, fp)
+            with open(self._uri) as fp:
+                data = yaml.safe_load(fp)
+                return data or self._default
+
+        def dump(self, data: Any) -> None:
+            with open(self._uri, "w") as fp:
+                yaml.safe_dump(data, fp)
