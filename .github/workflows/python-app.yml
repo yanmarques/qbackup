@@ -7,7 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: fedora:32
-      volumes: ./:/app
+      volumes: 
+        - ./:/app
     steps:
     - name: Set up Python
       run: ls -la
