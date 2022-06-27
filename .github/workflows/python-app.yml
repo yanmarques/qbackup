@@ -5,7 +5,8 @@ on: [pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: fedora:32
     steps:
     - name: Set up Python
-      run: |
-        podman run --rm -it fedora:32 dnf --version
+      run: ls -la
