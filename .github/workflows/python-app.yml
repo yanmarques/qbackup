@@ -11,4 +11,4 @@ jobs:
         - ${{ github.workspace }}:/app
     steps:
     - name: Set up Python
-      run: ls -la
+      run: ls -la /app
