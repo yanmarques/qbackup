@@ -3,8 +3,10 @@ import sys
 from pytest import fixture
 import pytest
 from qbackup.models import (
+    Group,
     Password,
     DestQube,
+    Period,
 )
 from qbackup.api import ModelNotFound
 from qbackup.cli import QbackupCLIManager
@@ -20,7 +22,7 @@ def cli_manager(request, dummy_connector, dummy_rw_stream):
             **kwargs,
         )
 
-    manager = QbackupCLIManager(data_manager_factory)
+    manager = QbackupCLIManager()
 
     # Add default params
     request.param.setdefault("passwd", "baz-password-default")
@@ -28,8 +30,12 @@ def cli_manager(request, dummy_connector, dummy_rw_stream):
 
     namespace = namedtuple("Namespace", request.param.keys())
     args = namespace(**request.param)
-    manager.initialize(dummy_connector, args, sys.stdout)
+    manager.initialize(data_manager_factory, dummy_connector, args, sys.stdout)
     
+    # manager.periods.upsert(Period(
+    #     name="test period",
+    # ))
+
     manager.passwords.upsert(Password(
         name="baz-password-default",
         content="foo",
@@ -38,8 +44,16 @@ def cli_manager(request, dummy_connector, dummy_rw_stream):
 
     manager.dest_qubes.upsert(DestQube(
         name="bar-dest-qube",
-        qube=""
+        qube="test backups",
+        executable="/my/path/to/file {123}",
     ))
+
+    # manager.groups.upsert(Group(
+    #     name="test group",
+    #     period="test period",
+    #     dest_qube="bar-dest-qube",
+    #     password="baz-password-default",
+    # ))
 
     return manager
 

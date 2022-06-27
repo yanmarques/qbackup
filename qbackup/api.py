@@ -3,7 +3,7 @@ Data structures for default API
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from pathlib import Path
 from types import TracebackType
 from typing import (
@@ -62,17 +62,6 @@ class AbstractModel(ABC):
 
     def serialize(self) -> Tuple[Hashable, Any]:
         return self.keyid(), asdict(self)
-
-
-def genuuid() -> str:
-    return str(uuid4())
-
-
-class UUIDIdentifierMixin:
-    id: str = field(default_factory=genuuid)
-
-    def keyid(self) -> Hashable:
-        return self.id
 
 
 class AbstractDataManager(ABC):
@@ -142,7 +131,7 @@ class AbstractDataManager(ABC):
         pass
 
     @abstractmethod
-    def _find_data_by_field(self, keyid: Hashable, value) -> Optional[Any]:
+    def _find_data_by_field(self, keyid: str, value) -> Optional[Any]:
         pass
 
     @abstractmethod

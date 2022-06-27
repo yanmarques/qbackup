@@ -3,9 +3,10 @@ Models used for configuration
 """
 
 from dataclasses import dataclass, field
-from typing import Hashable, Optional
+from typing import Hashable
+from uuid import uuid4
 
-from .api import AbstractModel, UUIDIdentifierMixin
+from .api import AbstractModel
 
 
 @dataclass
@@ -27,10 +28,18 @@ class Period(AbstractModel):
         return self.name
 
 
+def genuuid() -> str:
+    return str(uuid4())
+
+
 @dataclass
-class Qube(UUIDIdentifierMixin, AbstractModel):
+class Qube(AbstractModel):
     name: str
     group_name: str
+    id: str = field(default_factory=genuuid)
+
+    def keyid(self) -> Hashable:
+        return self.id
 
 
 @dataclass

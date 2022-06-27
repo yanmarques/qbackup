@@ -27,6 +27,7 @@ class FileBackedConnector(AbstractDataConnector):
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             os.close(fd)
+            raise
         else:
             self._lock_file_fd = fd
 

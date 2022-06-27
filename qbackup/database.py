@@ -88,7 +88,7 @@ class SqliteDataManager(AbstractDataManager):
         )
 
     def _find_data_by_field(
-        self, field: Hashable, value
+        self, field: str, value
     ) -> Optional[sqlite3.Row]:
         cursor = self._execute_sql(
             f"""
@@ -164,7 +164,7 @@ class StreamDataManager(AbstractDataManager):
         self.get_or_fail(keyid)
         self._branch.pop(keyid)
 
-    def _find_data_by_field(self, field: Hashable, value) -> Optional[Any]:
+    def _find_data_by_field(self, field: str, value) -> Optional[Any]:
         # Just be smart, use O(1) when we are looking for the id
         if field == self._id:
             return self._branch.get(value)
