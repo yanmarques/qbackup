@@ -22,7 +22,13 @@ def sanitize_path(untrusted_path: str) -> str:
     pot = pathlib.Path(untrusted_path).resolve()
 
     # finally join the user home directory with the intended path
-    return pathlib.Path.home() / pot
+    result = pathlib.Path.home() / pot
+
+    if result.is_relative_to(pathlib.Path.home()):
+        return result
+
+    # potential path traversal, exit silently
+    sys.exit(0)
 
 
 def transfer_backup(path: str) -> None:
